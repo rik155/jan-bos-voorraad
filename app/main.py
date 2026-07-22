@@ -140,10 +140,11 @@ def dashboard(request: Request, q: str = "", category: str = "", low: int = 0):
         categories = list(db.scalars(select(Product.category).where(Product.category != "").distinct().order_by(Product.category)))
         total = db.scalar(select(func.count(Product.id))) or 0
         low_count = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
+        missing_photo_count = db.scalar(select(func.count(Product.id)).where((Product.photo_data == "") | (Product.photo_data.is_(None)))) or 0
         popular_ids = [row[0] for row in db.execute(select(StockMutation.product_id, func.count(StockMutation.id)).group_by(StockMutation.product_id).order_by(func.count(StockMutation.id).desc()).limit(6))]
         popular = [db.get(Product, product_id) for product_id in popular_ids]
         mutations = list(db.scalars(select(StockMutation).options(joinedload(StockMutation.product)).order_by(StockMutation.created_at.desc()).limit(8)))
-    return templates.TemplateResponse("index.html", {"request": request, "products": products, "popular": popular, "categories": categories, "q": q, "selected_category": category, "low": low, "total_products": total, "low_count": low_count, "mutations": mutations})
+    return templates.TemplateResponse("index.html", {"request": request, "products": products, "popular": popular, "categories": categories, "q": q, "selected_category": category, "low": low, "total_products": total, "low_count": low_count, "missing_photo_count": missing_photo_count, "mutations": mutations})
 
 
 @app.get("/inventarisatie", response_class=HTMLResponse)
@@ -277,6 +278,27 @@ def edit(product_id: int, name: str = Form(...), article_number: str = Form(""),
         elif photo and photo.filename: product.photo_data = make_photo_data(photo)
         db.commit()
     return RedirectResponse(f"/product/{product_id}", 303)
+
+
+@app.get("/fotos", response_class=HTMLResponse)
+def photo_page(request: Request):
+    with Session(engine) as db:
+        missing = list(db.scalars(select(Product).where((Product.photo_data == "") | (Product.photo_data.is_(None))).order_by(Product.name)))
+        product = missing[0] if missing else None
+        total_missing = len(missing)
+    return templates.TemplateResponse("photos.html", {"request": request, "p": product, "total_missing": total_missing})
+
+
+@app.post("/products/{product_id}/photo")
+def save_product_photo(product_id: int, photo: UploadFile = File(...), return_to: str = Form("/")):
+    photo_data = make_photo_data(photo)
+    with Session(engine) as db:
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(404, "Product niet gevonden")
+        product.photo_data = photo_data
+        db.commit()
+    return RedirectResponse(return_to if return_to.startswith("/") else "/", 303)
 
 
 @app.post("/products/{product_id}/delete")

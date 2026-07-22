@@ -31,3 +31,8 @@ Verwacht:
 Deze versie is als PWA ingericht. Open de app eenmalig in Safari en kies **Deel > Zet op beginscherm**. Start hem daarna uitsluitend via het nieuwe beginscherm-icoon; dan opent hij schermvullend zonder Safari- of Google-balk.
 
 De PostgreSQL-database en bestaande producten worden niet aangepast of gewist.
+
+## V10
+- iPhone barcode scanning fallback via html5-qrcode when BarcodeDetector is unavailable.
+- Photo workflow at `/fotos` for rapidly photographing all existing products.
+- One-tap photo add/replace on every product detail page.

@@ -16,8 +16,9 @@
   <button class="primary" onclick="openModal('addModal')">+ Product</button>
 </header>
 <main>
-  <section class="action-row">
-    <a class="action scan" href="#zoeken">🔎 Product zoeken</a>
+  <section class="action-row four-actions">
+    <a class="action inventory" href="/inventarisatie">📦 Inventarisatie starten</a>
+    <a class="action scan" href="/scan">📷 Barcode scannen</a>
     <a class="action order" href="/?low=1">⚠️ {{ low_count }} bijbestellen</a>
     <a class="action export" href="/export.xlsx">📄 Excel</a>
   </section>
@@ -72,6 +73,6 @@
   <details class="history"><summary>Laatste wijzigingen bekijken</summary><div class="table-wrap"><table><thead><tr><th>Tijd</th><th>Product</th><th>Wijziging</th><th>Voorraad</th></tr></thead><tbody>{% for m in mutations %}<tr><td>{{m.created_at.strftime('%d-%m %H:%M')}}</td><td>{{m.product.name}}</td><td class="{% if m.change>0 %}positive{% else %}negative{% endif %}">{{'+' if m.change>0 else ''}}{{'%g'|format(m.change)}}</td><td>{{'%g'|format(m.stock_after)}}</td></tr>{% else %}<tr><td colspan="4">Nog geen wijzigingen.</td></tr>{% endfor %}</tbody></table></div></details>
 </main>
 
-<div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Foto (optioneel)<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" placeholder="Kit, tape, verf..."></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Locatie<input name="location" placeholder="Stelling B2"></label><label>Beginvoorraad<input name="stock" type="number" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" step="0.01" value="0"></label><button class="primary wide">Opslaan</button></form></div></div>
+<div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Artikelcode<input name="article_number"></label><label>Barcode<input name="barcode" inputmode="numeric"></label><label>Foto (optioneel)<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" placeholder="Kit, tape, verf..."></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Locatie<input name="location" placeholder="Stelling B2"></label><label>Beginvoorraad<input name="stock" type="number" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" step="0.01" value="0"></label><button class="primary wide">Opslaan</button></form></div></div>
 <script src="/static/app.js"></script>
 </body></html>

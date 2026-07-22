@@ -26,3 +26,8 @@ Verwacht:
 ```json
 {"status":"ok","database":"postgresql","persistent":true}
 ```
+
+## V8 - iPhone app zonder browserbalk
+Deze versie is als PWA ingericht. Open de app eenmalig in Safari en kies **Deel > Zet op beginscherm**. Start hem daarna uitsluitend via het nieuwe beginscherm-icoon; dan opent hij schermvullend zonder Safari- of Google-balk.
+
+De PostgreSQL-database en bestaande producten worden niet aangepast of gewist.

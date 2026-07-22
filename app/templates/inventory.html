@@ -1,4 +1,12 @@
-<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#153f63"><title>Voorraad tellen</title><link rel="stylesheet" href="/static/style.css"></head>
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#153f63">
+  <meta name="application-name" content="Jan Bos Voorraad">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Voorraad">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><title>Voorraad tellen</title><link rel="stylesheet" href="/static/style.css"></head>
 <body><header class="topbar"><a class="brand" href="/"><img src="/static/janbos_logo.png" alt="Jan Bos"><div><h1>Voorraad tellen</h1><p>Scan en vul het werkelijke aantal in</p></div></a><a class="back" href="/">← Overzicht</a></header>
 <main class="scan-main">
 <section class="scanner-card"><div class="page-kicker">INVENTARISATIE</div><h2>Scan de barcode</h2><p class="lead">Een bekend product kun je direct corrigeren. Een nieuwe barcode voeg je meteen toe.</p><div id="scannerBox" class="scanner-box"><video id="scannerVideo" playsinline></video><div class="scan-corners"></div><div class="scan-line"></div></div><div id="scannerMessage" class="scanner-message">Druk op camera starten</div><button id="startScanner" class="primary giant">📷 Camera starten</button><button id="stopScanner" class="other" hidden>Camera stoppen</button><div class="manual-barcode"><span>Barcode handmatig invullen</span><form method="get"><input id="manualBarcode" name="barcode" value="{{barcode}}" inputmode="numeric" autocomplete="off" placeholder="Barcode"><button>Openen</button></form></div></section>
@@ -7,4 +15,4 @@
 {% elif barcode %}
 <section class="inventory-result new"><div class="badge-new">Nieuwe barcode</div><h2>Nieuw product toevoegen</h2><p>Barcode <b>{{barcode}}</b></p><form method="post" action="/inventory/create" enctype="multipart/form-data" class="form-grid"><input type="hidden" name="barcode" value="{{barcode}}"><label>Productnaam<input name="name" required autofocus placeholder="Bijv. CE verfemmer 8 liter"></label><label>Artikelcode<input name="article_number" placeholder="Bijv. DVE8"></label><label>Getelde voorraad<input name="stock" type="number" min="0" step="0.01" value="1" required></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Minimumvoorraad<input name="minimum_stock" type="number" min="0" step="0.01" value="0"></label><label>Foto (optioneel)<input name="photo" type="file" accept="image/*" capture="environment"></label><button class="primary wide giant">Product opslaan</button></form></section>
 {% endif %}
-</main><nav class="mobile-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="scan-nav" href="/scan"><span>▣</span>Scannen</a><a class="active" href="/inventarisatie"><span>✓</span>Tellen</a></nav><script src="/static/scanner.js"></script></body></html>
+</main><nav class="mobile-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="scan-nav" href="/scan"><span>▣</span>Scannen</a><a class="active" href="/inventarisatie"><span>✓</span>Tellen</a></nav><script src="/static/scanner.js"></script><script src="/static/app.js"></script></body></html>

@@ -9,9 +9,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from PIL import Image
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, create_engine, func, inspect, select, text
+from sqlalchemy import DateTime, Float, ForeignKey, LargeBinary, String, Text, create_engine, func, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/voorraad.db")
@@ -62,6 +64,16 @@ class StockMutation(Base):
     employee: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     product: Mapped[Product] = relationship(back_populates="mutations")
+
+
+class ExcelBackup(Base):
+    __tablename__ = "excel_backups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str] = mapped_column(String(200))
+    file_data: Mapped[bytes] = mapped_column(LargeBinary)
+    product_count: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 Base.metadata.create_all(engine)
@@ -324,22 +336,95 @@ def delete(product_id: int):
     return RedirectResponse("/", 303)
 
 
+@app.get("/backups", response_class=HTMLResponse)
+def backups_page(request: Request):
+    with Session(engine) as db:
+        backups = list(db.scalars(select(ExcelBackup).order_by(ExcelBackup.created_at.desc()).limit(50)))
+    return templates.TemplateResponse("backups.html", {"request": request, "backups": backups})
+
+
+def build_inventory_workbook(products, mutations):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Voorraad"
+    ws.sheet_view.showGridLines = False
+    navy = "173F5F"; blue = "24699F"; green = "C6EFCE"; green_text = "006100"
+    red = "FFC7CE"; red_text = "9C0006"; orange = "FCE4D6"; orange_text = "9C5700"; light = "EAF1F5"
+    thin = Side(style="thin", color="D9E2E8")
+
+    ws.merge_cells("A1:I1")
+    ws["A1"] = "JAN BOS VOORRAADOVERZICHT"
+    ws["A1"].font = Font(size=18, bold=True, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor=navy)
+    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 32
+    ws["A2"] = "Laatste update"; ws["B2"] = datetime.now().strftime("%d-%m-%Y %H:%M")
+    ws["D2"] = "Aantal producten"; ws["E2"] = len(products)
+    ws["G2"] = "Onder minimum"; ws["H2"] = sum(1 for p in products if p.stock < p.minimum_stock)
+    for c in ("A2","D2","G2"):
+        ws[c].font = Font(bold=True, color=navy)
+    headers = ["Product", "Artikelcode", "Barcode", "Categorie", "Voorraad", "Eenheid", "Minimum", "Status", "Bijbestellen"]
+    ws.append([]); ws.append(headers)
+    for cell in ws[4]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor=blue)
+        cell.alignment = Alignment(horizontal="center")
+    for idx, product in enumerate(products, start=5):
+        ws.append([product.name, product.article_number, product.barcode, product.category, product.stock, product.unit, product.minimum_stock, f'=IF(E{idx}<G{idx},"ROOD",IF(E{idx}=G{idx},"ORANJE","GROEN"))', f'=MAX(G{idx}-E{idx},0)'])
+        for cell in ws[idx]:
+            cell.border = Border(bottom=thin)
+        ws[f"E{idx}"].number_format = '0.##'
+        ws[f"G{idx}"].number_format = '0.##'
+        ws[f"I{idx}"].number_format = '0.##'
+    last=max(5, 4+len(products))
+    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5<$G5"], fill=PatternFill("solid", fgColor=red), font=Font(color=red_text)))
+    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5=$G5"], fill=PatternFill("solid", fgColor=orange), font=Font(color=orange_text)))
+    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5>$G5"], fill=PatternFill("solid", fgColor=green), font=Font(color=green_text)))
+    widths=[34,16,20,18,12,14,12,14,14]
+    for i,w in enumerate(widths,1): ws.column_dimensions[get_column_letter(i)].width=w
+    ws.freeze_panes="A5"; ws.auto_filter.ref=f"A4:I{last}"
+
+    order = wb.create_sheet("Bijbestellen")
+    order.sheet_view.showGridLines=False
+    order.append(["Product", "Artikelcode", "Barcode", "Voorraad", "Minimum", "Te bestellen", "Eenheid"])
+    for c in order[1]: c.font=Font(bold=True,color="FFFFFF"); c.fill=PatternFill("solid",fgColor=navy)
+    for product in products:
+        if product.stock < product.minimum_stock:
+            order.append([product.name, product.article_number, product.barcode, product.stock, product.minimum_stock, max(product.minimum_stock-product.stock,0), product.unit])
+    for i,w in enumerate([34,16,20,12,12,14,14],1): order.column_dimensions[get_column_letter(i)].width=w
+    order.freeze_panes="A2"; order.auto_filter.ref=f"A1:G{max(1,order.max_row)}"
+
+    hist = wb.create_sheet("Mutaties")
+    hist.sheet_view.showGridLines=False
+    hist.append(["Datum", "Tijd", "Product", "Barcode", "Wijziging", "Voorraad na", "Reden", "Medewerker"])
+    for c in hist[1]: c.font=Font(bold=True,color="FFFFFF"); c.fill=PatternFill("solid",fgColor=navy)
+    for m in mutations:
+        hist.append([m.created_at.strftime("%d-%m-%Y"), m.created_at.strftime("%H:%M"), m.product.name if m.product else "", m.product.barcode if m.product else "", m.change, m.stock_after, m.reason, m.employee])
+    for i,w in enumerate([13,10,34,20,12,14,28,18],1): hist.column_dimensions[get_column_letter(i)].width=w
+    hist.freeze_panes="A2"; hist.auto_filter.ref=f"A1:H{max(1,hist.max_row)}"
+
+    out=BytesIO(); wb.save(out); return out.getvalue()
+
+
 @app.get("/export.xlsx")
 def export_excel():
     with Session(engine) as db:
         products = list(db.scalars(select(Product).order_by(Product.name)))
-    workbook = Workbook(); sheet = workbook.active; sheet.title = "Voorraad"
-    sheet.append(["Jan Bos Voorraadoverzicht", datetime.now().strftime("%d-%m-%Y %H:%M")]); sheet.append([])
-    headers = ["Product", "Artikelcode", "Barcode", "Categorie", "Voorraad", "Eenheid", "Minimum", "Locatie", "Status"]
-    sheet.append(headers)
-    for cell in sheet[3]:
-        cell.font = Font(bold=True, color="FFFFFF"); cell.fill = PatternFill("solid", fgColor="173F5F"); cell.alignment = Alignment(horizontal="center")
-    for product in products:
-        sheet.append([product.name, product.article_number, product.barcode, product.category, product.stock, product.unit, product.minimum_stock, product.location, "BESTELLEN" if product.stock <= product.minimum_stock else "OK"])
-    for index, width in enumerate([32,16,20,20,12,14,12,18,14], 1): sheet.column_dimensions[chr(64 + index)].width = width
-    sheet.freeze_panes = "A4"
-    output = BytesIO(); workbook.save(output); output.seek(0)
-    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="voorraad_{datetime.now():%Y%m%d_%H%M}.xlsx"'})
+        mutations = list(db.scalars(select(StockMutation).options(joinedload(StockMutation.product)).order_by(StockMutation.created_at.desc())))
+        data = build_inventory_workbook(products, mutations)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup = ExcelBackup(filename=f"Jan_Bos_Voorraad_backup_{stamp}.xlsx", file_data=data, product_count=len(products))
+        db.add(backup); db.commit()
+    return StreamingResponse(BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": 'attachment; filename="Jan_Bos_Voorraad.xlsx"'})
+
+
+@app.get("/backups/{backup_id}/download")
+def download_backup(backup_id: int):
+    with Session(engine) as db:
+        backup = db.get(ExcelBackup, backup_id)
+        if not backup: raise HTTPException(404, "Back-up niet gevonden")
+        data = backup.file_data; filename = backup.filename
+    return StreamingResponse(BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 @app.post("/api/products/{product_id}/quick")
 def api_quick(product_id: int, change: float = Form(...)):

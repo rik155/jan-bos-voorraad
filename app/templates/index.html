@@ -25,7 +25,7 @@
   <section class="clean-summary">
     <a href="#producten"><strong>{{total_products}}</strong><span>Producten</span></a>
     <a href="/?low=1"><strong>{{low_count}}</strong><span>Bijbestellen</span></a>
-    <a href="/export.xlsx"><strong>Excel</strong><span>Back-up</span></a>
+    <a href="/export.xlsx"><strong>Excel</strong><span>Download + back-up</span></a>
   </section>
 
   <section class="clean-tools">
@@ -54,7 +54,7 @@
     {% else %}<p class="empty">Geen producten gevonden.</p>{% endfor %}
   </section>
 </main>
-<nav class="clean-nav"><a class="active" href="/"><span>⌂</span>Overzicht</a><a href="/scan"><span>⌗</span>Scannen</a><a href="/inventarisatie"><span>✓</span>Tellen</a></nav>
+<nav class="clean-nav"><a class="active" href="/"><span>⌂</span>Overzicht</a><a href="/scan"><span>⌗</span>Scannen</a><a href="/backups"><span>▣</span>Back-ups</a></nav>
 <div id="toast" class="toast"></div>
 <div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Artikelcode<input name="article_number"></label><label>Barcode<input name="barcode" inputmode="numeric"></label><label>Foto<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category"></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Beginvoorraad<input name="stock" type="number" min="0" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" min="0" step="0.01" value="0"></label><button class="primary wide">Opslaan</button></form></div></div>
 <script src="/static/app.js"></script></body></html>

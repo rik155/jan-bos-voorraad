@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 from datetime import datetime
 from io import BytesIO
@@ -71,9 +72,23 @@ with engine.begin() as connection:
     if "barcode" not in columns:
         connection.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(100) DEFAULT ''"))
 
+
+PRODUCT_IMAGE_MAP = {}
+try:
+    with open("app/static/product_images.json", "r", encoding="utf-8") as image_file:
+        PRODUCT_IMAGE_MAP = json.load(image_file)
+except (OSError, ValueError):
+    PRODUCT_IMAGE_MAP = {}
+
+def product_image(product):
+    if getattr(product, "photo_data", ""):
+        return product.photo_data
+    return PRODUCT_IMAGE_MAP.get(str(getattr(product, "barcode", "")), "/static/product-images/default.png")
+
 app = FastAPI(title="Jan Bos Voorraad")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["product_image"] = product_image
 
 
 @app.get("/health")
@@ -140,7 +155,7 @@ def dashboard(request: Request, q: str = "", category: str = "", low: int = 0):
         categories = list(db.scalars(select(Product.category).where(Product.category != "").distinct().order_by(Product.category)))
         total = db.scalar(select(func.count(Product.id))) or 0
         low_count = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
-        missing_photo_count = db.scalar(select(func.count(Product.id)).where((Product.photo_data == "") | (Product.photo_data.is_(None)))) or 0
+        missing_photo_count = sum(1 for p in products if not p.photo_data and str(p.barcode) not in PRODUCT_IMAGE_MAP)
         popular_ids = [row[0] for row in db.execute(select(StockMutation.product_id, func.count(StockMutation.id)).group_by(StockMutation.product_id).order_by(func.count(StockMutation.id).desc()).limit(6))]
         popular = [db.get(Product, product_id) for product_id in popular_ids]
         mutations = list(db.scalars(select(StockMutation).options(joinedload(StockMutation.product)).order_by(StockMutation.created_at.desc()).limit(8)))

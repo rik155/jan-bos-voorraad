@@ -61,3 +61,20 @@ async function startScanner(){
 startBtn?.addEventListener('click',startScanner);stopBtn?.addEventListener('click',stopScanner);
 document.getElementById('manualLookup')?.addEventListener('submit',e=>{e.preventDefault();const code=document.getElementById('manualBarcode').value.trim();if(code)targetFor(code)});
 window.addEventListener('pagehide',stopScanner);
+
+// iPhone fallback: maak een foto van de barcode en decodeer die lokaal.
+document.getElementById('barcodePhoto')?.addEventListener('change', async event => {
+  const file=event.target.files?.[0];
+  if(!file)return;
+  busy=false;message.textContent='Barcode op de foto zoeken...';
+  try{
+    if(typeof Html5Qrcode==='undefined')throw new Error('Scannerbibliotheek niet geladen');
+    const photoScanner=new Html5Qrcode('html5Reader',false);
+    const code=await photoScanner.scanFile(file,true);
+    try{await photoScanner.clear()}catch(e){}
+    await finishScan(code);
+  }catch(error){
+    message.textContent='Geen barcode gevonden. Maak de foto recht, scherp en met voldoende licht.';
+    event.target.value='';
+  }
+});

@@ -1,32 +1,27 @@
-# Jan Bos Voorraad V4 - Barcode Inventarisatie
+# Jan Bos Voorraad V6 - PostgreSQL veilig
 
-Deze versie is bedoeld om eerst een schone voorraad op te bouwen door alleen producten te scannen die echt in het magazijn liggen.
+Deze versie gebruikt automatisch de Render PostgreSQL-database zodra de environment variable `DATABASE_URL` aanwezig is. Zonder die variabele gebruikt de app alleen lokaal SQLite voor ontwikkeling en tests.
 
-## Nieuw
-- Inventarisatiemodus met camera-scanner
-- Bestaande barcode koppelen aan nieuw product
-- Bestaand product opnieuw tellen en voorraad corrigeren
-- Dagelijkse barcode-scanner opent het product direct
-- Handmatige barcode-invoer als camera-scannen niet wordt ondersteund
-- Artikelcode en barcode in Excel-export
-- Bestaande database blijft behouden door automatische migratie
+## Controle na deploy
 
-## Werkwijze inventarisatie
-1. Open `Inventarisatie starten`.
-2. Geef de browser toegang tot de camera.
-3. Scan een barcode.
-4. Nieuwe barcode: vul productnaam, getelde voorraad, eenheid, minimum en locatie in.
-5. Bekende barcode: vul alleen het werkelijk getelde aantal in.
-6. Na opslaan kun je direct het volgende product scannen.
+Open:
+
+```
+https://jouw-app.onrender.com/health
+```
+
+Bij een goede koppeling staat er:
+
+```json
+{"status":"ok","database":"postgresql","persistent":true}
+```
 
 ## Render
-De app gebruikt dezelfde `DATABASE_URL` als de bestaande versie. Upload alle bestanden over de bestaande repository heen. Render deployt daarna automatisch.
 
-## Let op camera
-Camera-scannen werkt alleen via HTTPS, zoals de Render-link. Niet alle browsers ondersteunen de ingebouwde `BarcodeDetector`. Chrome op Android werkt meestal het best. Er is altijd handmatige barcode-invoer als fallback.
+- Key: `DATABASE_URL`
+- Value: de Internal Database URL van Render
+- Daarna: Save, rebuild, and deploy
 
+## Belangrijk
 
-## Twee duidelijke gebruiksmodi
-
-- **Inventarisatiemodus:** scan een barcode en vul de werkelijk getelde totale voorraad in. Nieuwe barcodes kunnen direct als product worden opgeslagen.
-- **Dagelijks gebruik:** scan een barcode, boek met -1, -5, +1 of +10 en ga automatisch terug naar de scanner voor het volgende product.
+Een gratis Render PostgreSQL-database verloopt op de datum die Render in het dashboard toont. Upgrade de database voor die datum of maak tijdig een export/back-up. Nieuwe deploys en normale herstarts wissen PostgreSQL-data niet.

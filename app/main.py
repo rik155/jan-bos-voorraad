@@ -78,7 +78,20 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Healthcheck that also verifies the configured database connection."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return {
+            "status": "ok",
+            "database": engine.dialect.name,
+            "persistent": engine.dialect.name == "postgresql",
+        }
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": engine.dialect.name, "detail": str(exc)},
+        )
 
 
 def make_photo_data(upload: UploadFile | None) -> str:

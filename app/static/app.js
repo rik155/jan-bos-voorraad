@@ -44,3 +44,30 @@ liveSearch?.addEventListener('input',filterCards);
 categoryFilter?.addEventListener('change',filterCards);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js')}
+
+// V15: snelle voorraadboeking op productpagina, met directe feedback.
+async function detailQuickBook(form){
+  const productId=form.dataset.product;
+  const change=Number(form.querySelector('[name="change"]').value);
+  const button=form.querySelector('button');
+  const stockEl=document.querySelector('.detail-stock-value');
+  const statusEl=document.querySelector('.detail-stock-status');
+  button.disabled=true;
+  try{
+    const body=new FormData();body.append('change',String(change));
+    const response=await fetch(`/api/products/${productId}/quick`,{method:'POST',body});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.detail||'Boeken mislukt');
+    if(stockEl)stockEl.textContent=Number(data.stock).toLocaleString('nl-NL',{maximumFractionDigits:2});
+    if(statusEl){statusEl.textContent=data.low?'Bijbestellen':'Voorraad op peil';statusEl.classList.toggle('danger',data.low)}
+    if(navigator.vibrate)navigator.vibrate(45);
+    try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=880;g.gain.setValueAtTime(.08,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.11);o.start();o.stop(ctx.currentTime+.11)}catch(_e){}
+    if(form.dataset.scanMode==='1'){
+      document.getElementById('saveOverlay')?.classList.add('show');
+      setTimeout(()=>location.href='/scan',850);
+    }else{
+      showToast(`${change>0?'+':''}${change} opgeslagen · voorraad ${data.stock}`);
+    }
+  }catch(error){showToast(error.message||'Boeken mislukt',true);button.disabled=false}
+}
+document.querySelectorAll('.detail-quick-form').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();detailQuickBook(form)}));

@@ -1,34 +1,52 @@
 <!doctype html>
-<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#153f63">
-  <meta name="application-name" content="Jan Bos Voorraad">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Voorraad">
-  <meta name="mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="/static/manifest.json">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"><title>{{p.name}} - Voorraad</title><link rel="stylesheet" href="/static/style.css"></head>
-<body>
-<header class="topbar"><a class="brand" href="/"><img src="/static/janbos_logo.png" alt="Jan Bos"><div><h1>{{p.name}}</h1><p>{% if scan_mode %}Scan en boek{% else %}Productdetails{% endif %}</p></div></a><a class="back" href="{% if scan_mode %}/scan{% else %}/{% endif %}">← {% if scan_mode %}Scanner{% else %}Overzicht{% endif %}</a></header>
-<main class="detail-main">
-  <section class="detail-card {% if p.stock<=p.minimum_stock %}low{% endif %}">
-    <div class="detail-photo-wrap"><div class="detail-photo"><img src="{{ product_image(p) }}" alt="{{p.name}}"></div><form method="post" action="/products/{{p.id}}/photo" enctype="multipart/form-data" class="inline-photo-form"><input type="hidden" name="return_to" value="/product/{{p.id}}"><label>📷 {% if p.photo_data %}Foto vervangen{% else %}Foto toevoegen{% endif %}<input name="photo" type="file" accept="image/*" capture="environment" onchange="this.form.submit()"></label></form></div>
-    <div class="detail-stock">{{'%g'|format(p.stock)}} <small>{{p.unit}}</small></div>
-    <div class="product-codes">{% if p.article_number %}Artikelcode: <b>{{p.article_number}}</b>{% endif %}{% if p.barcode %}<br>Barcode: <b>{{p.barcode}}</b>{% endif %}</div>
-    <div class="detail-status">{% if p.stock<=p.minimum_stock %}🔴 Bijbestellen{% else %}🟢 Voorraad op peil{% endif %}</div>
-    <div class="giant-buttons">
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-1"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="minus">−1</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-5"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="minus soft">−5</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="1"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="plus">+1</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="10"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="plus soft">+10</button></form>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff">
+  <meta name="application-name" content="Jan Bos Voorraad"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Voorraad"><meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/static/manifest.json"><link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+  <title>{{p.name}} - Voorraad</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="product-screen {% if scan_mode %}scan-result-screen{% endif %}">
+<header class="clean-header detail-header">
+  <a href="{% if scan_mode %}/scan{% else %}/{% endif %}" class="detail-back">‹</a>
+  <a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a>
+  <button class="detail-menu" onclick="openModal('editModal')" aria-label="Product aanpassen">•••</button>
+</header>
+<main class="v15-detail">
+  {% if scan_mode %}<div class="scan-confirm-pill"><span>✓</span> Product gevonden</div>{% endif %}
+  <section class="v15-product-card {% if p.stock<=p.minimum_stock %}low{% endif %}" data-product-id="{{p.id}}">
+    <div class="v15-photo-wrap">
+      <img src="{{ product_image(p) }}" alt="{{p.name}}">
+      <form method="post" action="/products/{{p.id}}/photo" enctype="multipart/form-data" class="v15-photo-button"><input type="hidden" name="return_to" value="/product/{{p.id}}{% if scan_mode %}?mode=scan{% endif %}"><label aria-label="Foto toevoegen">📷<input name="photo" type="file" accept="image/*" capture="environment" onchange="this.form.submit()"></label></form>
     </div>
-    <button class="other" onclick="openModal('stockModal')">Ander aantal</button>{% if scan_mode %}<p class="scan-next-note">Na het boeken ga je automatisch terug naar de scanner.</p>{% endif %}
+    <div class="v15-product-copy">
+      <span class="v15-eyebrow">{% if p.category %}{{p.category}}{% else %}PRODUCT{% endif %}</span>
+      <h1>{{p.name}}</h1>
+      <p class="v15-code">{% if p.article_number %}{{p.article_number}} · {% endif %}{{p.barcode}}</p>
+    </div>
+
+    <div class="v15-stock-panel">
+      <span>Huidige voorraad</span>
+      <div><strong class="detail-stock-value">{{'%g'|format(p.stock)}}</strong><small>{{p.unit}}</small></div>
+      <p class="detail-stock-status {% if p.stock<=p.minimum_stock %}danger{% endif %}">{% if p.stock<=p.minimum_stock %}Bijbestellen{% else %}Voorraad op peil{% endif %}</p>
+    </div>
+
+    <div class="v15-action-label">Voorraad aanpassen</div>
+    <div class="v15-book-grid">
+      {% for amount in [-1, 1, -5, 5] %}
+      <form class="detail-quick-form" data-product="{{p.id}}" data-scan-mode="{{'1' if scan_mode else '0'}}"><input type="hidden" name="change" value="{{amount}}"><button class="{% if amount > 0 %}positive{% else %}negative{% endif %}"><span>{{'+' if amount > 0 else '−'}}</span>{{amount|abs}}</button></form>
+      {% endfor %}
+    </div>
+    <button class="v15-other" onclick="openModal('stockModal')">Ander aantal</button>
+    {% if scan_mode %}<a class="v15-scan-again" href="/scan">Volgend product scannen</a>{% endif %}
   </section>
-  <section class="side-stack">
-    <section class="qr-card"><h2>Barcode</h2>{% if p.barcode %}<div class="barcode-number">{{p.barcode}}</div><p>Scan de bestaande barcode op het magazijnlabel.</p>{% else %}<p>Nog geen barcode gekoppeld. Voeg hem toe bij Product aanpassen.</p>{% endif %}</section>
-    <button class="edit-button" onclick="openModal('editModal')">Product aanpassen</button>
+
+  <section class="v15-meta-card">
+    <div><span>Minimumvoorraad</span><strong>{{'%g'|format(p.minimum_stock)}} {{p.unit}}</strong></div>
+    <div><span>Barcode</span><strong>{{p.barcode or 'Niet gekoppeld'}}</strong></div>
   </section>
 </main>
+
+<div id="saveOverlay" class="save-overlay"><div><span>✓</span><strong>Opgeslagen</strong><small>Terug naar scanner…</small></div></div>
+<div id="toast" class="toast"></div>
 <div class="modal" id="stockModal"><div class="box small"><button class="close" onclick="closeModal('stockModal')">×</button><h2>Ander aantal</h2><form method="post" action="/products/{{p.id}}/mutate" class="form-grid"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><label>In of uit<select name="direction"><option value="uit">Uitboeken</option><option value="in">Inboeken</option></select></label><label>Aantal<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Naam (optioneel)<input name="employee"></label><label>Reden (optioneel)<input name="reason"></label><button class="primary wide">Bevestigen</button></form></div></div>
 <div class="modal" id="editModal"><div class="box"><button class="close" onclick="closeModal('editModal')">×</button><h2>Product aanpassen</h2><form method="post" action="/products/{{p.id}}/edit" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" value="{{p.name}}" required></label><label>Artikelcode<input name="article_number" value="{{p.article_number}}"></label><label>Barcode<input name="barcode" value="{{p.barcode}}" inputmode="numeric"></label><label>Nieuwe foto<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" value="{{p.category}}"></label><label>Eenheid<select name="unit">{% for unit in ['stuks','kokers','rollen','dozen','liter','kg'] %}<option {% if p.unit==unit %}selected{% endif %}>{{unit}}</option>{% endfor %}</select></label><label>Minimumvoorraad<input name="minimum_stock" type="number" min="0" step="0.01" value="{{p.minimum_stock}}"></label>{% if p.photo_data %}<label class="check"><input name="remove_photo" type="checkbox" value="1"> Huidige foto verwijderen</label>{% endif %}<button class="primary wide">Wijzigingen opslaan</button></form><form method="post" action="/products/{{p.id}}/delete" onsubmit="return confirm('Product echt verwijderen?')"><button class="delete-button">Product verwijderen</button></form></div></div>
-<nav class="mobile-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="scan-nav {% if scan_mode %}active{% endif %}" href="/scan"><span>▣</span>Scannen</a><a href="/inventarisatie"><span>✓</span>Tellen</a></nav><script src="/static/app.js"></script></body></html>
+<nav class="clean-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="{% if scan_mode %}active{% endif %}" href="/scan"><span>⌗</span>Scannen</a><a href="/inventarisatie"><span>✓</span>Tellen</a></nav>
+<script src="/static/app.js"></script></body></html>

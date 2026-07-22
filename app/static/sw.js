@@ -1,4 +1,4 @@
-const CACHE = 'jan-bos-voorraad-pwa-v11';
+const CACHE = 'jan-bos-voorraad-pwa-v12';
 const STATIC_ASSETS = [
   '/static/style.css',
   '/static/app.js',

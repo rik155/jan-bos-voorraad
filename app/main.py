@@ -303,3 +303,26 @@ def export_excel():
     sheet.freeze_panes = "A4"
     output = BytesIO(); workbook.save(output); output.seek(0)
     return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="voorraad_{datetime.now():%Y%m%d_%H%M}.xlsx"'})
+
+@app.post("/api/products/{product_id}/quick")
+def api_quick(product_id: int, change: float = Form(...)):
+    with Session(engine) as db:
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(404, "Product niet gevonden")
+        if product.stock + change < 0:
+            raise HTTPException(400, "Onvoldoende voorraad")
+        product.stock += change
+        db.add(StockMutation(
+            product_id=product.id,
+            change=change,
+            stock_after=product.stock,
+            reason="Snel geboekt",
+            employee="",
+        ))
+        db.commit()
+        return {
+            "ok": True,
+            "stock": product.stock,
+            "low": product.stock <= product.minimum_stock,
+        }

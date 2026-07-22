@@ -1,27 +1,28 @@
-# Jan Bos Voorraad V6 - PostgreSQL veilig
+# Jan Bos Voorraad V7 - Snel & Simpel
 
-Deze versie gebruikt automatisch de Render PostgreSQL-database zodra de environment variable `DATABASE_URL` aanwezig is. Zonder die variabele gebruikt de app alleen lokaal SQLite voor ontwikkeling en tests.
+Vernieuwde mobiele voorraad-app met:
 
-## Controle na deploy
+- groot scan-startscherm;
+- rustige Jan Bos-huisstijl;
+- live zoeken zonder extra klik;
+- voorraad direct aanpassen zonder pagina opnieuw te laden;
+- duidelijke knop voor bijbestellen;
+- inventarisatiemodus en dagelijks scannen;
+- PostgreSQL via `DATABASE_URL`;
+- bestaande producten en voorraad blijven behouden.
 
-Open:
+## Belangrijk bij update
 
-```
-https://jouw-app.onrender.com/health
-```
+Deze versie verandert **geen tabelnamen en verwijdert geen databasekolommen**. De bestaande PostgreSQL-database blijft gekoppeld via dezelfde `DATABASE_URL`. Upload de bestanden over de huidige GitHub-repository; maak geen nieuwe database aan.
 
-Bij een goede koppeling staat er:
+## Render
+
+De bestaande instellingen blijven gelijk. Na de deploy controleer je:
+
+`/health`
+
+Verwacht:
 
 ```json
 {"status":"ok","database":"postgresql","persistent":true}
 ```
-
-## Render
-
-- Key: `DATABASE_URL`
-- Value: de Internal Database URL van Render
-- Daarna: Save, rebuild, and deploy
-
-## Belangrijk
-
-Een gratis Render PostgreSQL-database verloopt op de datum die Render in het dashboard toont. Upgrade de database voor die datum of maak tijdig een export/back-up. Nieuwe deploys en normale herstarts wissen PostgreSQL-data niet.

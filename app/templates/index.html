@@ -2,77 +2,96 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#153f63">
   <title>Jan Bos Voorraad</title>
   <link rel="manifest" href="/static/manifest.json">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="brand">
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Naar voorraad overzicht">
     <img src="/static/janbos_logo.png" alt="Jan Bos">
-    <div><h1>Voorraad</h1><p>Één tik en weer verder</p></div>
-  </div>
-  <button class="primary" onclick="openModal('addModal')">+ Product</button>
+    <div><h1>Voorraad</h1><p>Snel scannen, één tik, klaar</p></div>
+  </a>
+  <button class="header-add" onclick="openModal('addModal')"><span>＋</span> Product</button>
 </header>
-<main>
-  <section class="action-row four-actions">
-    <a class="action inventory" href="/inventarisatie">📦 Inventarisatiemodus</a>
-    <a class="action scan" href="/scan">📷 Dagelijks scannen</a>
-    <a class="action order" href="/?low=1">⚠️ {{ low_count }} bijbestellen</a>
-    <a class="action export" href="/export.xlsx">📄 Excel</a>
+
+<main class="dashboard">
+  <section class="hero-actions">
+    <a class="hero-button scan" href="/scan"><span class="hero-icon">▣</span><span><b>Barcode scannen</b><small>Dagelijks in- en uitboeken</small></span></a>
+    <a class="hero-button inventory" href="/inventarisatie"><span class="hero-icon">✓</span><span><b>Voorraad tellen</b><small>Inventarisatie of correctie</small></span></a>
   </section>
 
-  {% if popular %}
-  <h2 class="section-title">Veel gebruikt</h2>
+  <section class="stats-row">
+    <div class="stat"><span>Producten</span><strong>{{total_products}}</strong></div>
+    <a class="stat warning {% if low_count %}active{% endif %}" href="/?low=1"><span>Bijbestellen</span><strong>{{low_count}}</strong></a>
+    <a class="stat export" href="/export.xlsx"><span>Back-up</span><strong>Excel</strong></a>
+  </section>
+
+  <section class="search-panel">
+    <form id="zoeken" class="search-form" method="get">
+      <div class="search-input-wrap"><span>⌕</span><input id="liveSearch" name="q" value="{{q}}" placeholder="Zoek een product..." autocomplete="off"></div>
+      <select name="category" id="categoryFilter"><option value="">Alle categorieën</option>{% for c in categories %}<option value="{{c}}" {% if c==selected_category %}selected{% endif %}>{{c}}</option>{% endfor %}</select>
+      {% if low %}<input type="hidden" name="low" value="1">{% endif %}
+    </form>
+    {% if low %}<a class="clear-filter" href="/">× Toon alle producten</a>{% endif %}
+  </section>
+
+  {% if popular and not q and not low and not selected_category %}
+  <div class="section-heading"><div><span class="eyebrow">SNEL PAKKEN</span><h2>Veel gebruikt</h2></div></div>
   <section class="product-grid popular-grid">
     {% for p in popular %}
-    <article class="product-card {% if p.stock<=p.minimum_stock %}low{% endif %}">
+    <article class="product-card {% if p.stock<=p.minimum_stock %}low{% endif %}" data-name="{{p.name|lower}}" data-category="{{p.category|lower}}" data-product-id="{{p.id}}">
       <a class="product-main" href="/product/{{p.id}}">
         <div class="thumb">{% if p.photo_data %}<img src="{{p.photo_data}}" alt="{{p.name}}">{% else %}<span>📦</span>{% endif %}</div>
-        <div class="product-info"><h3>{{p.name}}</h3><p>{{p.location or 'Geen locatie'}}</p><strong>{{'%g'|format(p.stock)}} <small>{{p.unit}}</small></strong></div>
+        <div class="product-info">
+          <div class="title-line"><h3>{{p.name}}</h3>{% if p.stock<=p.minimum_stock %}<em>BIJBESTELLEN</em>{% endif %}</div>
+          {% if p.article_number %}<p>Art. {{p.article_number}}</p>{% endif %}
+          <div class="stock-line"><strong class="stock-value" data-stock="{{p.stock}}">{{'%g'|format(p.stock)}}</strong><small>{{p.unit}}</small></div>
+        </div>
       </a>
-      <div class="tap-buttons">
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-1"><button class="minus">−1</button></form>
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="1"><button class="plus">+1</button></form>
+      <div class="tap-buttons compact">
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="-1"><button class="minus" aria-label="1 afboeken">−1</button></form>
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="1"><button class="plus" aria-label="1 inboeken">+1</button></form>
       </div>
     </article>
     {% endfor %}
   </section>
   {% endif %}
 
-  <form id="zoeken" class="filters" method="get">
-    <input name="q" value="{{q}}" placeholder="Product of locatie">
-    <select name="category"><option value="">Alle categorieën</option>{% for c in categories %}<option value="{{c}}" {% if c==selected_category %}selected{% endif %}>{{c}}</option>{% endfor %}</select>
-    <button>Zoeken</button>
-  </form>
-
-  <section class="summary"><span><b>{{total_products}}</b> producten</span><span class="summary-low"><b>{{low_count}}</b> bijbestellen</span></section>
-
-  <section class="product-grid">
+  <div class="section-heading"><div><span class="eyebrow">OVERZICHT</span><h2>{% if low %}Bijbestellen{% elif q %}Zoekresultaten{% else %}Alle producten{% endif %}</h2></div><span class="result-count"><b id="visibleCount">{{products|length}}</b> zichtbaar</span></div>
+  <section class="product-grid" id="productGrid">
     {% for p in products %}
-    <article class="product-card {% if p.stock<=p.minimum_stock %}low{% endif %}">
+    <article class="product-card {% if p.stock<=p.minimum_stock %}low{% endif %}" data-name="{{p.name|lower}} {{p.article_number|lower}} {{p.barcode|lower}}" data-category="{{p.category|lower}}" data-product-id="{{p.id}}" data-minimum="{{p.minimum_stock}}">
       <a class="product-main" href="/product/{{p.id}}">
         <div class="thumb">{% if p.photo_data %}<img src="{{p.photo_data}}" alt="{{p.name}}">{% else %}<span>📦</span>{% endif %}</div>
         <div class="product-info">
-          <div class="title-line"><h3>{{p.name}}</h3>{% if p.stock<=p.minimum_stock %}<em>BESTELLEN</em>{% endif %}</div>
-          <p>{{p.category or 'Product'}} · {{p.location or 'Geen locatie'}}</p>
-          <strong>{{'%g'|format(p.stock)}} <small>{{p.unit}}</small></strong>
+          <div class="title-line"><h3>{{p.name}}</h3><em class="low-label" {% if p.stock>p.minimum_stock %}hidden{% endif %}>BIJBESTELLEN</em></div>
+          <p>{% if p.article_number %}Art. {{p.article_number}}{% else %}{{p.category or 'Product'}}{% endif %}</p>
+          <div class="stock-line"><strong class="stock-value" data-stock="{{p.stock}}">{{'%g'|format(p.stock)}}</strong><small>{{p.unit}}</small></div>
         </div>
       </a>
       <div class="tap-buttons four">
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-1"><button class="minus">−1</button></form>
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-5"><button class="minus soft">−5</button></form>
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="1"><button class="plus">+1</button></form>
-        <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="10"><button class="plus soft">+10</button></form>
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="-1"><button class="minus">−1</button></form>
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="-5"><button class="minus soft">−5</button></form>
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="1"><button class="plus">+1</button></form>
+        <form class="quick-form" data-product="{{p.id}}"><input type="hidden" name="change" value="10"><button class="plus soft">+10</button></form>
       </div>
     </article>
-    {% else %}<p class="empty">Nog geen producten gevonden.</p>{% endfor %}
+    {% else %}<p class="empty">Geen producten gevonden.</p>{% endfor %}
   </section>
 
-  <details class="history"><summary>Laatste wijzigingen bekijken</summary><div class="table-wrap"><table><thead><tr><th>Tijd</th><th>Product</th><th>Wijziging</th><th>Voorraad</th></tr></thead><tbody>{% for m in mutations %}<tr><td>{{m.created_at.strftime('%d-%m %H:%M')}}</td><td>{{m.product.name}}</td><td class="{% if m.change>0 %}positive{% else %}negative{% endif %}">{{'+' if m.change>0 else ''}}{{'%g'|format(m.change)}}</td><td>{{'%g'|format(m.stock_after)}}</td></tr>{% else %}<tr><td colspan="4">Nog geen wijzigingen.</td></tr>{% endfor %}</tbody></table></div></details>
+  <details class="history"><summary>Laatste voorraadwijzigingen</summary><div class="table-wrap"><table><thead><tr><th>Tijd</th><th>Product</th><th>Wijziging</th><th>Voorraad</th></tr></thead><tbody>{% for m in mutations %}<tr><td>{{m.created_at.strftime('%d-%m %H:%M')}}</td><td>{{m.product.name}}</td><td class="{% if m.change>0 %}positive{% else %}negative{% endif %}">{{'+' if m.change>0 else ''}}{{'%g'|format(m.change)}}</td><td>{{'%g'|format(m.stock_after)}}</td></tr>{% else %}<tr><td colspan="4">Nog geen wijzigingen.</td></tr>{% endfor %}</tbody></table></div></details>
 </main>
 
-<div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Artikelcode<input name="article_number"></label><label>Barcode<input name="barcode" inputmode="numeric"></label><label>Foto (optioneel)<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" placeholder="Kit, tape, verf..."></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Locatie<input name="location" placeholder="Stelling B2"></label><label>Beginvoorraad<input name="stock" type="number" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" step="0.01" value="0"></label><button class="primary wide">Opslaan</button></form></div></div>
+<nav class="mobile-nav">
+  <a class="active" href="/"><span>⌂</span>Overzicht</a>
+  <a class="scan-nav" href="/scan"><span>▣</span>Scannen</a>
+  <a href="/inventarisatie"><span>✓</span>Tellen</a>
+</nav>
+
+<div id="toast" class="toast" role="status"></div>
+<div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><p class="modal-intro">Alleen de belangrijkste gegevens. Een locatie is niet nodig.</p><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Artikelcode<input name="article_number"></label><label>Barcode<input name="barcode" inputmode="numeric"></label><label>Foto (optioneel)<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" placeholder="Kit, tape, verf..."></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Beginvoorraad<input name="stock" type="number" min="0" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" min="0" step="0.01" value="0"></label><button class="primary wide">Product opslaan</button></form></div></div>
 <script src="/static/app.js"></script>
 </body></html>

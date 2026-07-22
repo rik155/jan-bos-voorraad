@@ -25,7 +25,8 @@ function targetFor(code) {
 }
 
 async function lookupDaily(code) {
-  if (busy) return;
+  // finishScan heeft busy al aangezet om dubbele scans te blokkeren.
+  // Zoek het product daarom altijd op en gebruik busy alleen als scan-lock.
   busy = true;
   message.textContent = 'Product zoeken...';
   try {

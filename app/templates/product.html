@@ -1,19 +1,19 @@
 <!doctype html>
 <html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{p.name}} - Voorraad</title><link rel="stylesheet" href="/static/style.css"></head>
 <body>
-<header><div class="brand"><img src="/static/janbos_logo.png" alt="Jan Bos"><div><h1>{{p.name}}</h1><p>{{p.location or 'Geen locatie'}}</p></div></div><a class="back" href="/">← Overzicht</a></header>
+<header><div class="brand"><img src="/static/janbos_logo.png" alt="Jan Bos"><div><h1>{{p.name}}</h1><p>{% if scan_mode %}Dagelijks gebruik · scan en boek{% else %}{{p.location or 'Geen locatie'}}{% endif %}</p></div></div><a class="back" href="{% if scan_mode %}/scan{% else %}/{% endif %}">← {% if scan_mode %}Scanner{% else %}Overzicht{% endif %}</a></header>
 <main class="detail-main">
   <section class="detail-card {% if p.stock<=p.minimum_stock %}low{% endif %}">
     <div class="detail-photo">{% if p.photo_data %}<img src="{{p.photo_data}}" alt="{{p.name}}">{% else %}<span>📦</span>{% endif %}</div>
     <div class="detail-stock">{{'%g'|format(p.stock)}} <small>{{p.unit}}</small></div>
     <div class="product-codes">{% if p.article_number %}Artikelcode: <b>{{p.article_number}}</b>{% endif %}{% if p.barcode %}<br>Barcode: <b>{{p.barcode}}</b>{% endif %}</div><div class="detail-status">{% if p.stock<=p.minimum_stock %}🔴 Bijbestellen{% else %}🟢 Voorraad goed{% endif %}</div>
     <div class="giant-buttons">
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-1"><input type="hidden" name="return_to" value="/product/{{p.id}}"><button class="minus">−1</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-5"><input type="hidden" name="return_to" value="/product/{{p.id}}"><button class="minus soft">−5</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="1"><input type="hidden" name="return_to" value="/product/{{p.id}}"><button class="plus">+1</button></form>
-      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="10"><input type="hidden" name="return_to" value="/product/{{p.id}}"><button class="plus soft">+10</button></form>
+      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-1"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="minus">−1</button></form>
+      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="-5"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="minus soft">−5</button></form>
+      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="1"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="plus">+1</button></form>
+      <form method="post" action="/products/{{p.id}}/quick"><input type="hidden" name="change" value="10"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><button class="plus soft">+10</button></form>
     </div>
-    <button class="other" onclick="openModal('stockModal')">Ander aantal</button>
+    <button class="other" onclick="openModal('stockModal')">Ander aantal</button>{% if scan_mode %}<p class="scan-next-note">Na het boeken ga je automatisch terug naar de scanner.</p>{% endif %}
   </section>
   <section class="side-stack">
     <section class="qr-card"><h2>Barcode gekoppeld</h2>{% if p.barcode %}<div class="barcode-number">{{p.barcode}}</div><p>Scan voortaan de bestaande barcode op het magazijnlabel.</p>{% else %}<p>Nog geen barcode gekoppeld. Voeg hem toe bij Product aanpassen.</p>{% endif %}</section>
@@ -21,7 +21,7 @@
   </section>
 </main>
 
-<div class="modal" id="stockModal"><div class="box small"><button class="close" onclick="closeModal('stockModal')">×</button><h2>Ander aantal</h2><form method="post" action="/products/{{p.id}}/mutate" class="form-grid"><input type="hidden" name="return_to" value="/product/{{p.id}}"><label>In of uit<select name="direction"><option value="uit">Uitboeken</option><option value="in">Inboeken</option></select></label><label>Aantal<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Naam (optioneel)<input name="employee"></label><label>Reden (optioneel)<input name="reason"></label><button class="primary wide">Bevestigen</button></form></div></div>
+<div class="modal" id="stockModal"><div class="box small"><button class="close" onclick="closeModal('stockModal')">×</button><h2>Ander aantal</h2><form method="post" action="/products/{{p.id}}/mutate" class="form-grid"><input type="hidden" name="return_to" value="{% if scan_mode %}/scan{% else %}/product/{{p.id}}{% endif %}"><label>In of uit<select name="direction"><option value="uit">Uitboeken</option><option value="in">Inboeken</option></select></label><label>Aantal<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Naam (optioneel)<input name="employee"></label><label>Reden (optioneel)<input name="reason"></label><button class="primary wide">Bevestigen</button></form></div></div>
 
 <div class="modal" id="editModal"><div class="box"><button class="close" onclick="closeModal('editModal')">×</button><h2>Product aanpassen</h2><form method="post" action="/products/{{p.id}}/edit" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" value="{{p.name}}" required></label><label>Artikelcode<input name="article_number" value="{{p.article_number}}"></label><label>Barcode<input name="barcode" value="{{p.barcode}}" inputmode="numeric"></label><label>Nieuwe foto<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category" value="{{p.category}}"></label><label>Eenheid<select name="unit">{% for unit in ['stuks','kokers','rollen','dozen','liter','kg'] %}<option {% if p.unit==unit %}selected{% endif %}>{{unit}}</option>{% endfor %}</select></label><label>Locatie<input name="location" value="{{p.location}}"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" step="0.01" value="{{p.minimum_stock}}"></label>{% if p.photo_data %}<label class="check"><input name="remove_photo" type="checkbox" value="1"> Huidige foto verwijderen</label>{% endif %}<button class="primary wide">Wijzigingen opslaan</button></form><form method="post" action="/products/{{p.id}}/delete" onsubmit="return confirm('Product echt verwijderen?')"><button class="delete-button">Product verwijderen</button></form></div></div>
 <script src="/static/app.js"></script></body></html>

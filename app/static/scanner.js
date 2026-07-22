@@ -8,7 +8,7 @@ function targetFor(code){return window.SCANNER_MODE==='daily'?lookupDaily(code):
 async function lookupDaily(code){
   if(busy)return; busy=true; message.textContent='Product zoeken...';
   try{const r=await fetch('/api/barcode/'+encodeURIComponent(code));const d=await r.json();
-    if(d.found){location.href='/product/'+d.id}else{message.textContent='Barcode niet bekend. Start eerst inventarisatie.';busy=false}}
+    if(d.found){location.href='/product/'+d.id+'?mode=scan'}else{message.textContent='Barcode niet bekend. Start eerst inventarisatie.';busy=false}}
   catch(e){message.textContent='Zoeken mislukt. Probeer opnieuw.';busy=false}
 }
 async function stopScanner(){if(timer)clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null;startBtn.hidden=false;stopBtn.hidden=true}

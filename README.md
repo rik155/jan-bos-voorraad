@@ -24,3 +24,9 @@ De app gebruikt dezelfde `DATABASE_URL` als de bestaande versie. Upload alle bes
 
 ## Let op camera
 Camera-scannen werkt alleen via HTTPS, zoals de Render-link. Niet alle browsers ondersteunen de ingebouwde `BarcodeDetector`. Chrome op Android werkt meestal het best. Er is altijd handmatige barcode-invoer als fallback.
+
+
+## Twee duidelijke gebruiksmodi
+
+- **Inventarisatiemodus:** scan een barcode en vul de werkelijk getelde totale voorraad in. Nieuwe barcodes kunnen direct als product worden opgeslagen.
+- **Dagelijks gebruik:** scan een barcode, boek met -1, -5, +1 of +10 en ga automatisch terug naar de scanner voor het volgende product.

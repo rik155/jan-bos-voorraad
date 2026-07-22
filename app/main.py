@@ -195,13 +195,14 @@ def scan_page(request: Request):
 
 
 @app.get("/product/{product_id}", response_class=HTMLResponse)
-def product_page(request: Request, product_id: int):
+def product_page(request: Request, product_id: int, mode: str = ""):
+    scan_mode = mode == "scan"
     with Session(engine) as db:
         product = db.get(Product, product_id)
         if not product:
             raise HTTPException(404, "Product niet gevonden")
         history = list(db.scalars(select(StockMutation).where(StockMutation.product_id == product_id).order_by(StockMutation.created_at.desc()).limit(10)))
-    return templates.TemplateResponse("product.html", {"request": request, "p": product, "history": history})
+    return templates.TemplateResponse("product.html", {"request": request, "p": product, "history": history, "scan_mode": scan_mode})
 
 
 @app.post("/products")

@@ -13,7 +13,7 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from PIL import Image
-from sqlalchemy import DateTime, Float, ForeignKey, LargeBinary, String, Text, create_engine, func, inspect, select, text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, create_engine, func, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, joinedload, mapped_column, relationship
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/voorraad.db")
@@ -64,6 +64,26 @@ class StockMutation(Base):
     employee: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     product: Mapped[Product] = relationship(back_populates="mutations")
+
+
+class InventorySession(Base):
+    __tablename__ = "inventory_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="active", index=True)
+
+
+class InventoryCheck(Base):
+    __tablename__ = "inventory_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("inventory_sessions.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    previous_stock: Mapped[float] = mapped_column(Float, default=0)
+    counted_stock: Mapped[float] = mapped_column(Float, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class ExcelBackup(Base):
@@ -148,17 +168,34 @@ def get_product_by_barcode(db: Session, barcode: str) -> Product | None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, q: str = "", category: str = "", low: int = 0):
+def dashboard(request: Request):
+    with Session(engine) as db:
+        total = db.scalar(select(func.count(Product.id))) or 0
+        low_count = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
+        active = db.scalar(select(InventorySession).where(InventorySession.status == "active").order_by(InventorySession.started_at.desc()))
+        last = db.scalar(select(InventorySession).where(InventorySession.status == "completed").order_by(InventorySession.completed_at.desc()))
+        active_checked = 0
+        if active:
+            active_checked = db.scalar(select(func.count(func.distinct(InventoryCheck.product_id))).where(InventoryCheck.session_id == active.id)) or 0
+        last_checked = 0
+        last_changed = 0
+        if last:
+            last_checked = db.scalar(select(func.count(func.distinct(InventoryCheck.product_id))).where(InventoryCheck.session_id == last.id)) or 0
+            last_changed = db.scalar(select(func.count(InventoryCheck.id)).where(InventoryCheck.session_id == last.id, InventoryCheck.previous_stock != InventoryCheck.counted_stock)) or 0
+    return templates.TemplateResponse("index.html", {
+        "request": request, "total_products": total, "low_count": low_count,
+        "active_session": active, "active_checked": active_checked,
+        "last_session": last, "last_checked": last_checked, "last_changed": last_changed,
+    })
+
+
+@app.get("/producten", response_class=HTMLResponse)
+def products_page(request: Request, q: str = "", category: str = "", low: int = 0):
     with Session(engine) as db:
         stmt = select(Product)
         if q:
             like = f"%{q}%"
-            stmt = stmt.where(
-                (Product.name.ilike(like))
-                | (Product.article_number.ilike(like))
-                | (Product.barcode.ilike(like))
-                | (Product.location.ilike(like))
-            )
+            stmt = stmt.where((Product.name.ilike(like)) | (Product.article_number.ilike(like)) | (Product.barcode.ilike(like)))
         if category:
             stmt = stmt.where(Product.category == category)
         if low:
@@ -167,11 +204,81 @@ def dashboard(request: Request, q: str = "", category: str = "", low: int = 0):
         categories = list(db.scalars(select(Product.category).where(Product.category != "").distinct().order_by(Product.category)))
         total = db.scalar(select(func.count(Product.id))) or 0
         low_count = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
-        missing_photo_count = sum(1 for p in products if not p.photo_data and str(p.barcode) not in PRODUCT_IMAGE_MAP)
         popular_ids = [row[0] for row in db.execute(select(StockMutation.product_id, func.count(StockMutation.id)).group_by(StockMutation.product_id).order_by(func.count(StockMutation.id).desc()).limit(6))]
         popular = [db.get(Product, product_id) for product_id in popular_ids]
-        mutations = list(db.scalars(select(StockMutation).options(joinedload(StockMutation.product)).order_by(StockMutation.created_at.desc()).limit(8)))
-    return templates.TemplateResponse("index.html", {"request": request, "products": products, "popular": popular, "categories": categories, "q": q, "selected_category": category, "low": low, "total_products": total, "low_count": low_count, "missing_photo_count": missing_photo_count, "mutations": mutations})
+    return templates.TemplateResponse("products.html", {"request": request, "products": products, "popular": popular, "categories": categories, "q": q, "selected_category": category, "low": low, "total_products": total, "low_count": low_count})
+
+
+@app.post("/controle/start")
+def control_start():
+    with Session(engine) as db:
+        active = db.scalar(select(InventorySession).where(InventorySession.status == "active").order_by(InventorySession.started_at.desc()))
+        if not active:
+            active = InventorySession(status="active")
+            db.add(active)
+            db.commit()
+            db.refresh(active)
+        session_id = active.id
+    return RedirectResponse(f"/controle?session_id={session_id}", 303)
+
+
+@app.get("/controle", response_class=HTMLResponse)
+def control_page(request: Request, session_id: int, barcode: str = "", saved: int = 0):
+    barcode = clean_barcode(barcode)
+    with Session(engine) as db:
+        control = db.get(InventorySession, session_id)
+        if not control or control.status != "active":
+            return RedirectResponse("/", 303)
+        total = db.scalar(select(func.count(Product.id))) or 0
+        checked = db.scalar(select(func.count(func.distinct(InventoryCheck.product_id))).where(InventoryCheck.session_id == session_id)) or 0
+        product = get_product_by_barcode(db, barcode) if barcode else None
+        already_checked = False
+        if product:
+            already_checked = bool(db.scalar(select(func.count(InventoryCheck.id)).where(InventoryCheck.session_id == session_id, InventoryCheck.product_id == product.id)))
+    return templates.TemplateResponse("control.html", {"request": request, "control": control, "barcode": barcode, "product": product, "total": total, "checked": checked, "saved": saved, "already_checked": already_checked})
+
+
+@app.post("/controle/{session_id}/count/{product_id}")
+def control_count(session_id: int, product_id: int, counted_stock: float = Form(...)):
+    if counted_stock < 0:
+        raise HTTPException(400, "Voorraad kan niet negatief zijn")
+    with Session(engine) as db:
+        control = db.get(InventorySession, session_id)
+        product = db.get(Product, product_id)
+        if not control or control.status != "active" or not product:
+            raise HTTPException(404, "Controle of product niet gevonden")
+        previous = product.stock
+        product.stock = counted_stock
+        db.add(InventoryCheck(session_id=session_id, product_id=product_id, previous_stock=previous, counted_stock=counted_stock))
+        if previous != counted_stock:
+            db.add(StockMutation(product_id=product_id, change=counted_stock - previous, stock_after=counted_stock, reason="Wekelijkse voorraadcontrole", employee="Voorraadcontrole"))
+        db.commit()
+    return RedirectResponse(f"/controle?session_id={session_id}&saved=1", 303)
+
+
+@app.post("/controle/{session_id}/finish")
+def control_finish(session_id: int):
+    with Session(engine) as db:
+        control = db.get(InventorySession, session_id)
+        if not control:
+            raise HTTPException(404, "Controle niet gevonden")
+        control.status = "completed"
+        control.completed_at = datetime.utcnow()
+        db.commit()
+    return RedirectResponse(f"/controle/{session_id}/samenvatting", 303)
+
+
+@app.get("/controle/{session_id}/samenvatting", response_class=HTMLResponse)
+def control_summary(request: Request, session_id: int):
+    with Session(engine) as db:
+        control = db.get(InventorySession, session_id)
+        if not control:
+            raise HTTPException(404, "Controle niet gevonden")
+        total = db.scalar(select(func.count(Product.id))) or 0
+        checked = db.scalar(select(func.count(func.distinct(InventoryCheck.product_id))).where(InventoryCheck.session_id == session_id)) or 0
+        changed = db.scalar(select(func.count(InventoryCheck.id)).where(InventoryCheck.session_id == session_id, InventoryCheck.previous_stock != InventoryCheck.counted_stock)) or 0
+        low = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
+    return templates.TemplateResponse("control_summary.html", {"request": request, "control": control, "total": total, "checked": checked, "changed": changed, "low": low})
 
 
 @app.get("/inventarisatie", response_class=HTMLResponse)

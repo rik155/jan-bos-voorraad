@@ -33,3 +33,28 @@ def test_export_creates_backup_and_downloads():
     page = client.get('/backups')
     assert page.status_code == 200
     assert 'Jan_Bos_Voorraad_backup_' in page.text
+
+def test_control_flow():
+    # Create one uniquely named product with barcode.
+    barcode = '9912345678901'
+    client.post('/products', data={
+        'name': 'V19 testproduct', 'article_number': 'V19', 'barcode': barcode,
+        'category': '', 'unit': 'stuks', 'location': '', 'stock': '10', 'minimum_stock': '3'
+    })
+    r = client.post('/controle/start', follow_redirects=False)
+    assert r.status_code == 303
+    location = r.headers['location']
+    assert location.startswith('/controle?session_id=')
+    session_id = int(location.split('session_id=')[1])
+    page = client.get(f'/controle?session_id={session_id}&barcode={barcode}')
+    assert page.status_code == 200
+    assert 'V19 testproduct' in page.text
+    # Resolve product id via barcode API.
+    product_id = client.get(f'/api/barcode/{barcode}').json()['id']
+    r = client.post(f'/controle/{session_id}/count/{product_id}', data={'counted_stock': '8'}, follow_redirects=False)
+    assert r.status_code == 303
+    finish = client.post(f'/controle/{session_id}/finish', follow_redirects=False)
+    assert finish.status_code == 303
+    summary = client.get(f'/controle/{session_id}/samenvatting')
+    assert summary.status_code == 200
+    assert 'Controle afgerond' in summary.text

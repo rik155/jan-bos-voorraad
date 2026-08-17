@@ -21,6 +21,7 @@ function targetFor(code) {
   const clean = cleanBarcode(code);
   if (!clean) return;
   if (window.SCANNER_MODE === 'daily') lookupDaily(clean);
+  else if (window.SCANNER_MODE === 'control') location.href = '/controle?session_id=' + encodeURIComponent(window.CONTROL_SESSION_ID) + '&barcode=' + encodeURIComponent(clean);
   else location.href = '/inventarisatie?barcode=' + encodeURIComponent(clean);
 }
 

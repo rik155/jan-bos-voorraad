@@ -58,3 +58,22 @@ def test_control_flow():
     summary = client.get(f'/controle/{session_id}/samenvatting')
     assert summary.status_code == 200
     assert 'Controle afgerond' in summary.text
+
+def test_daily_scan_take_with_note():
+    barcode = '9923456789012'
+    client.post('/products', data={
+        'name': 'V20 uitgifteproduct', 'article_number': 'V20', 'barcode': barcode,
+        'category': '', 'unit': 'stuks', 'location': '', 'stock': '20', 'minimum_stock': '2'
+    })
+    data = client.get(f'/api/barcode/{barcode}').json()
+    assert data['found'] is True
+    product_id = data['id']
+    page = client.get(f'/product/{product_id}?mode=scan')
+    assert page.status_code == 200
+    assert 'Hoeveel pak je?' in page.text
+    assert 'Opmerking' in page.text
+    r = client.post(f'/products/{product_id}/take', data={'amount': '3', 'note': 'Project: Nijmegen'}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers['location'] == '/scan?saved=1'
+    after = client.get(f'/api/barcode/{barcode}').json()
+    assert after['stock'] == 17

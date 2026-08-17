@@ -350,7 +350,18 @@ def product_page(request: Request, product_id: int, mode: str = ""):
         if not product:
             raise HTTPException(404, "Product niet gevonden")
         history = list(db.scalars(select(StockMutation).where(StockMutation.product_id == product_id).order_by(StockMutation.created_at.desc()).limit(10)))
-    return templates.TemplateResponse("product.html", {"request": request, "p": product, "history": history, "scan_mode": scan_mode})
+    template = "take.html" if scan_mode else "product.html"
+    return templates.TemplateResponse(template, {"request": request, "p": product, "history": history, "scan_mode": scan_mode})
+
+
+@app.post("/products/{product_id}/take")
+def take_product(product_id: int, amount: float = Form(...), note: str = Form("")):
+    """Dagelijkse uitgifte: scan product, vul aantal en optionele opmerking in."""
+    if amount <= 0:
+        raise HTTPException(400, "Aantal moet groter zijn dan nul")
+    reason = note.strip() or "Uit magazijn gepakt"
+    change_stock(product_id, -amount, reason=reason, employee="")
+    return RedirectResponse("/scan?saved=1", 303)
 
 
 @app.post("/products")

@@ -1,17 +1,16 @@
 <!doctype html>
 <html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#153f63"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Voorraad"><link rel="manifest" href="/static/manifest.json"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><title>Jan Bos Voorraad</title><link rel="stylesheet" href="/static/style.css"></head>
 <body class="v19-home">
-<header class="clean-header v19-header"><a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a><span class="v19-badge">Voorraadcontrole</span></header>
+<header class="clean-header v19-header"><a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a><span class="v19-badge">Magazijn</span></header>
 <main class="v19-main">
-<section class="v19-welcome"><small>MAGAZIJN</small><h1>Voorraad bijhouden zonder gedoe.</h1><p>Loop één keer per week door het magazijn, scan een product en vul het werkelijk getelde aantal in.</p></section>
-{% if active_session %}<section class="v19-resume"><div><small>CONTROLE BEZIG</small><strong>{{active_checked}} van {{total_products}} producten gecontroleerd</strong><div class="v19-progress"><i style="width:{{ (active_checked / total_products * 100) if total_products else 0 }}%"></i></div></div><a href="/controle?session_id={{active_session.id}}">Doorgaan →</a></section>{% endif %}
+<section class="v19-welcome"><small>SNEL UITBOEKEN</small><h1>Pakken, scannen, klaar.</h1><p>Scan het product, vul in hoeveel je pakt en voeg eventueel toe voor welk project, adres of bus het is.</p></section>
 <section class="v19-actions">
-<form method="post" action="/controle/start"><button class="v19-action primary-action"><span>⌗</span><div><strong>{% if active_session %}Voorraadcontrole hervatten{% else %}Voorraadcontrole starten{% endif %}</strong><small>Scannen → tellen → volgende</small></div><b>›</b></button></form>
+<a class="v19-action primary-action" href="/scan"><span>⌗</span><div><strong>Product scannen</strong><small>Scan → aantal → opmerking → klaar</small></div><b>›</b></a>
 <a class="v19-action" href="/producten"><span>▦</span><div><strong>Producten</strong><small>{{total_products}} producten in voorraad</small></div><b>›</b></a>
 <a class="v19-action" href="/export.xlsx"><span>⇩</span><div><strong>Excel</strong><small>Actuele lijst + automatische back-up</small></div><b>›</b></a>
 </section>
 <section class="v19-stats"><div><strong>{{total_products}}</strong><span>Producten</span></div><a href="/producten?low=1"><strong>{{low_count}}</strong><span>Bijbestellen</span></a></section>
-{% if last_session %}<section class="v19-last"><div class="v19-last-head"><div><small>LAATSTE CONTROLE</small><h2>{{last_session.completed_at.strftime('%d-%m-%Y') if last_session.completed_at else ''}}</h2></div><span class="v19-ok">✓ Gereed</span></div><div class="v19-last-grid"><div><strong>{{last_checked}}</strong><span>gecontroleerd</span></div><div><strong>{{last_changed}}</strong><span>aangepast</span></div><div><strong>{{low_count}}</strong><span>bijbestellen</span></div></div></section>{% endif %}
+<section class="weekly-control-link"><div><strong>Voorraad controleren?</strong><small>Voor incidenteel tellen of corrigeren.</small></div><form method="post" action="/controle/start"><button>{% if active_session %}Controle hervatten{% else %}Voorraad tellen{% endif %} →</button></form></section>
 </main>
-<nav class="clean-nav"><a class="active" href="/"><span>⌂</span>Dashboard</a><a href="/producten"><span>▦</span>Producten</a><a href="/backups"><span>▣</span>Back-ups</a></nav>
-<script src="/static/app.js?v=19"></script></body></html>
+<nav class="clean-nav"><a class="active" href="/"><span>⌂</span>Overzicht</a><a href="/scan"><span>⌗</span>Scannen</a><a href="/producten"><span>▦</span>Producten</a></nav>
+<script src="/static/app.js?v=20"></script></body></html>

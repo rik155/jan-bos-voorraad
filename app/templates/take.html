@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff">
+<meta name="application-name" content="Jan Bos Voorraad"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Voorraad"><meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/static/manifest.json"><link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+<title>{{p.name}} pakken</title><link rel="stylesheet" href="/static/style.css"></head>
+<body class="take-screen">
+<header class="clean-header detail-header"><a href="/scan" class="detail-back">‹</a><a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a><span class="take-header-label">UITBOEKEN</span></header>
+<main class="take-main">
+  <div class="scan-confirm-pill"><span>✓</span> Product gevonden</div>
+  <section class="take-product">
+    <div class="take-photo"><img src="{{ product_image(p) }}" alt="{{p.name}}"></div>
+    <div class="take-title"><small>{% if p.category %}{{p.category}}{% else %}PRODUCT{% endif %}</small><h1>{{p.name}}</h1><p>{% if p.article_number %}{{p.article_number}} · {% endif %}{{p.barcode}}</p></div>
+    <div class="take-stock"><span>Nu op voorraad</span><strong>{{'%g'|format(p.stock)}} <small>{{p.unit}}</small></strong></div>
+  </section>
+
+  <form method="post" action="/products/{{p.id}}/take" class="take-form" id="takeForm">
+    <label class="take-amount-label">Hoeveel pak je?</label>
+    <div class="take-number-row"><button type="button" class="take-step" data-step="-1">−</button><input id="takeAmount" name="amount" type="number" min="0.01" max="{{p.stock}}" step="0.01" inputmode="decimal" value="1" required><button type="button" class="take-step" data-step="1">+</button></div>
+    <div class="take-quick"><button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="5">5</button><button type="button" data-value="10">10</button></div>
+
+    <label class="take-note-label" for="takeNote">Opmerking <span>optioneel</span></label>
+    <textarea id="takeNote" name="note" rows="3" placeholder="Bijv. Project Nijmegen, Voorstadslaan 22 of in bus 3"></textarea>
+    <div class="note-chips"><button type="button" data-prefix="Project: ">Project</button><button type="button" data-prefix="Adres: ">Adres</button><button type="button" data-prefix="Bus: ">Bus</button><button type="button" data-prefix="Werkplaats">Werkplaats</button></div>
+
+    <button class="take-submit" type="submit"><span>−</span> Uitboeken & volgende scan</button>
+  </form>
+  <a class="take-cancel" href="/scan">Annuleren / ander product scannen</a>
+</main>
+<script>
+const amount=document.getElementById('takeAmount');
+document.querySelectorAll('.take-step').forEach(b=>b.addEventListener('click',()=>{const max=Number(amount.max||999999);const next=Math.max(0.01,Math.min(max,Number(amount.value||1)+Number(b.dataset.step)));amount.value=next;}));
+document.querySelectorAll('.take-quick button').forEach(b=>b.addEventListener('click',()=>{amount.value=Math.min(Number(amount.max||999999),Number(b.dataset.value));}));
+const note=document.getElementById('takeNote');
+document.querySelectorAll('.note-chips button').forEach(b=>b.addEventListener('click',()=>{const prefix=b.dataset.prefix;if(prefix==='Werkplaats'){note.value='Werkplaats';return;}note.value=prefix;note.focus();note.setSelectionRange(note.value.length,note.value.length);}));
+</script>
+</body></html>

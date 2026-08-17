@@ -1,5 +1,59 @@
-<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff"><link rel="manifest" href="/static/manifest.json"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png"><title>Excel back-ups</title><link rel="stylesheet" href="/static/style.css"></head>
-<body class="clean-home"><header class="clean-header"><a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a><a class="clean-add" href="/export.xlsx">Nieuwe Excel</a></header>
-<main class="clean-main"><section class="clean-hero"><p>EXCEL</p><h1>Back-ups</h1><p class="backup-intro">Iedere keer dat je op Excel klikt, wordt dezelfde actuele <b>Jan_Bos_Voorraad.xlsx</b> gedownload en hier automatisch een extra kopie bewaard.</p></section>
-<section class="backup-list">{% for b in backups %}<a class="backup-row" href="/backups/{{b.id}}/download"><div><strong>{{b.created_at.strftime('%d-%m-%Y om %H:%M')}}</strong><small>{{b.product_count}} producten · {{b.filename}}</small></div><span>Download ›</span></a>{% else %}<div class="empty">Nog geen Excel-back-ups. Klik op <b>Nieuwe Excel</b>.</div>{% endfor %}</section></main>
-<nav class="clean-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="active" href="/backups"><span>▣</span>Back-ups</a><a href="/export.xlsx"><span>⇩</span>Excel</a></nav></body></html>
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <title>Excel back-ups</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .backup-actions{display:grid;gap:12px;margin:16px 0 22px}.restore-box{background:#fff;border:1px solid #e4ebef;border-radius:18px;padding:18px}.restore-box h2{margin:0 0 6px;font-size:18px}.restore-box p{margin:0 0 14px;color:#647784;font-size:14px}.restore-box form{display:grid;gap:10px}.restore-box input[type=file]{width:100%;padding:12px;border:1px solid #d7e1e7;border-radius:12px;background:#f8fafb}.restore-box button,.restore-btn{border:0;border-radius:12px;padding:12px 14px;font-weight:700;cursor:pointer}.restore-box button{background:#173f5f;color:#fff}.backup-row-wrap{background:#fff;border:1px solid #e4ebef;border-radius:16px;margin-bottom:10px;overflow:hidden}.backup-row-wrap .backup-row{margin:0;border:0;border-radius:0}.backup-row-actions{display:flex;gap:8px;padding:0 14px 14px}.backup-row-actions a,.backup-row-actions button{flex:1;text-align:center;text-decoration:none;font:inherit;font-weight:700;border-radius:10px;padding:10px;border:1px solid #dbe5eb;background:#f7fafb;color:#173f5f}.backup-row-actions button{background:#fff7f2;color:#8b4a21}.restore-success{background:#eaf7ee;color:#1f6b37;border-radius:14px;padding:13px 15px;margin:14px 0;font-weight:650}.backup-note{font-size:13px;color:#6b7c87;margin-top:12px;line-height:1.45}
+  </style>
+</head>
+<body class="clean-home">
+<header class="clean-header">
+  <a href="/" class="clean-logo"><img src="/static/janbos_logo.png" alt="Jan Bos"></a>
+  <a class="clean-add" href="/export.xlsx">Nieuwe Excel</a>
+</header>
+<main class="clean-main">
+  <section class="clean-hero">
+    <p>EXCEL</p><h1>Back-ups</h1>
+    <p class="backup-intro">Je werkt steeds verder vanuit één bestand: <b>Jan_Bos_Voorraad.xlsx</b>. Iedere keer dat je op Excel klikt, wordt de actuele versie gedownload én een extra kopie veilig in PostgreSQL opgeslagen.</p>
+  </section>
+
+  {% if request.query_params.get('restored') %}
+  <div class="restore-success">Herstel voltooid · {{request.query_params.get('updated','0')}} bijgewerkt · {{request.query_params.get('created','0')}} nieuw{% if request.query_params.get('skipped','0') != '0' %} · {{request.query_params.get('skipped')}} overgeslagen{% endif %}.</div>
+  {% endif %}
+
+  <section class="restore-box">
+    <h2>Verder werken vanuit je Excel</h2>
+    <p>Heb je de hoofd-Excel op kantoor aangepast? Upload hem hier. De app koppelt producten op barcode/artikelcode en zet voorraad en minimumwaarden terug in de database.</p>
+    <form method="post" action="/restore.xlsx" enctype="multipart/form-data" onsubmit="return confirm('Voorraad bijwerken vanuit deze Excel? Bestaande voorraadwaarden kunnen veranderen.');">
+      <input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+      <button type="submit">Excel terugzetten in voorraad</button>
+    </form>
+    <div class="backup-note">Producten die niet in het Excel-bestand staan worden niet verwijderd. Zo kun je veilig verder borduren op dezelfde Excel.</div>
+  </section>
+
+  <section class="backup-list">
+    {% for b in backups %}
+    <div class="backup-row-wrap">
+      <a class="backup-row" href="/backups/{{b.id}}/download">
+        <div><strong>{{b.created_at.strftime('%d-%m-%Y om %H:%M')}}</strong><small>{{b.product_count}} producten · {{b.filename}}</small></div><span>›</span>
+      </a>
+      <div class="backup-row-actions">
+        <a href="/backups/{{b.id}}/download">Download</a>
+        <form method="post" action="/backups/{{b.id}}/restore" style="flex:1" onsubmit="return confirm('Deze back-up terugzetten? Voorraadaantallen worden hersteld naar deze versie.');">
+          <button type="submit" style="width:100%">Terugzetten</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">Nog geen Excel-back-ups. Klik op <b>Nieuwe Excel</b>.</div>
+    {% endfor %}
+  </section>
+</main>
+<nav class="clean-nav"><a href="/"><span>⌂</span>Overzicht</a><a class="active" href="/backups"><span>▣</span>Back-ups</a><a href="/export.xlsx"><span>⇩</span>Excel</a></nav>
+</body></html>

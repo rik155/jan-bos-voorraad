@@ -22,3 +22,14 @@ def test_unknown_barcode():
     r = client.get('/api/barcode/9999999999999')
     assert r.status_code == 200
     assert r.json()['found'] is False
+
+def test_backups_page():
+    assert client.get('/backups').status_code == 200
+
+def test_export_creates_backup_and_downloads():
+    r = client.get('/export.xlsx')
+    assert r.status_code == 200
+    assert 'spreadsheetml' in r.headers.get('content-type', '')
+    page = client.get('/backups')
+    assert page.status_code == 200
+    assert 'Jan_Bos_Voorraad_backup_' in page.text

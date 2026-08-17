@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -343,6 +343,105 @@ def backups_page(request: Request):
     return templates.TemplateResponse("backups.html", {"request": request, "backups": backups})
 
 
+
+
+def restore_inventory_from_excel(data: bytes, source_label: str) -> dict:
+    """Herstel/synchroniseer voorraad uit ons vaste Jan Bos Excel-formaat.
+
+    Bestaande producten worden bij voorkeur op barcode gekoppeld, daarna op
+    artikelcode en als laatste op exacte productnaam. Ontbrekende producten
+    worden aangemaakt. Producten die niet in het bestand staan worden niet
+    verwijderd.
+    """
+    try:
+        wb = load_workbook(BytesIO(data), data_only=False)
+    except Exception as exc:
+        raise HTTPException(400, "Dit bestand is geen geldige Excel.") from exc
+    if "Voorraad" not in wb.sheetnames:
+        raise HTTPException(400, 'Tabblad "Voorraad" ontbreekt.')
+    ws = wb["Voorraad"]
+
+    header_row = None
+    headers = {}
+    for row in range(1, min(ws.max_row, 20) + 1):
+        values = [str(ws.cell(row, col).value or '').strip() for col in range(1, ws.max_column + 1)]
+        if "Product" in values and "Voorraad" in values:
+            header_row = row
+            headers = {value: idx + 1 for idx, value in enumerate(values) if value}
+            break
+    if not header_row:
+        raise HTTPException(400, "De kolomkoppen van het voorraadoverzicht zijn niet gevonden.")
+
+    required = ["Product", "Voorraad"]
+    if any(name not in headers for name in required):
+        raise HTTPException(400, "Product en Voorraad moeten in de Excel staan.")
+
+    updated = 0
+    created = 0
+    skipped = 0
+    with Session(engine) as db:
+        for row in range(header_row + 1, ws.max_row + 1):
+            name = str(ws.cell(row, headers["Product"]).value or '').strip()
+            if not name:
+                continue
+            article = str(ws.cell(row, headers.get("Artikelcode", 0)).value or '').strip() if headers.get("Artikelcode") else ''
+            barcode = clean_barcode(str(ws.cell(row, headers.get("Barcode", 0)).value or '')) if headers.get("Barcode") else ''
+            category = str(ws.cell(row, headers.get("Categorie", 0)).value or '').strip() if headers.get("Categorie") else ''
+            unit = str(ws.cell(row, headers.get("Eenheid", 0)).value or 'stuks').strip() if headers.get("Eenheid") else 'stuks'
+            stock_raw = ws.cell(row, headers["Voorraad"]).value
+            min_raw = ws.cell(row, headers.get("Minimum", 0)).value if headers.get("Minimum") else 0
+            try:
+                stock = float(stock_raw or 0)
+                minimum = float(min_raw or 0)
+            except (TypeError, ValueError):
+                skipped += 1
+                continue
+            if stock < 0 or minimum < 0:
+                skipped += 1
+                continue
+
+            product = None
+            if barcode:
+                product = db.scalar(select(Product).where(Product.barcode == barcode))
+            if not product and article:
+                product = db.scalar(select(Product).where(Product.article_number == article))
+            if not product:
+                product = db.scalar(select(Product).where(func.lower(Product.name) == name.lower()))
+
+            if product:
+                old_stock = product.stock
+                product.name = name
+                if article: product.article_number = article
+                if barcode: product.barcode = barcode
+                product.category = category
+                product.unit = unit or "stuks"
+                product.minimum_stock = minimum
+                product.stock = stock
+                if old_stock != stock:
+                    db.add(StockMutation(
+                        product_id=product.id,
+                        change=stock - old_stock,
+                        stock_after=stock,
+                        reason=f"Hersteld uit {source_label}",
+                        employee="Systeem",
+                    ))
+                updated += 1
+            else:
+                product = Product(
+                    name=name, article_number=article, barcode=barcode, category=category,
+                    unit=unit or "stuks", stock=stock, minimum_stock=minimum,
+                )
+                db.add(product)
+                db.flush()
+                db.add(StockMutation(
+                    product_id=product.id, change=stock, stock_after=stock,
+                    reason=f"Aangemaakt uit {source_label}", employee="Systeem"
+                ))
+                created += 1
+        db.commit()
+    return {"updated": updated, "created": created, "skipped": skipped}
+
+
 def build_inventory_workbook(products, mutations):
     wb = Workbook()
     ws = wb.active
@@ -425,6 +524,37 @@ def download_backup(backup_id: int):
         if not backup: raise HTTPException(404, "Back-up niet gevonden")
         data = backup.file_data; filename = backup.filename
     return StreamingResponse(BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.post("/backups/{backup_id}/restore")
+def restore_backup(backup_id: int):
+    with Session(engine) as db:
+        backup = db.get(ExcelBackup, backup_id)
+        if not backup:
+            raise HTTPException(404, "Back-up niet gevonden")
+        data = bytes(backup.file_data)
+        label = backup.filename
+    result = restore_inventory_from_excel(data, label)
+    return RedirectResponse(
+        f"/backups?restored=1&updated={result['updated']}&created={result['created']}&skipped={result['skipped']}",
+        303,
+    )
+
+
+@app.post("/restore.xlsx")
+def restore_uploaded_excel(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(400, "Kies een .xlsx-bestand.")
+    data = file.file.read()
+    if not data:
+        raise HTTPException(400, "Het Excel-bestand is leeg.")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(400, "Het Excel-bestand is te groot.")
+    result = restore_inventory_from_excel(data, file.filename)
+    return RedirectResponse(
+        f"/backups?restored=1&updated={result['updated']}&created={result['created']}&skipped={result['skipped']}",
+        303,
+    )
 
 @app.post("/api/products/{product_id}/quick")
 def api_quick(product_id: int, change: float = Form(...)):

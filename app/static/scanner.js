@@ -85,6 +85,27 @@ function successFeedback() {
   successLayer?.classList.add('show');
 }
 
+function openPhotoCameraFallback(reason = '') {
+  const photoInput = document.getElementById('barcodePhoto');
+  if (!photoInput) {
+    message.textContent = reason || 'Camera kon niet starten. Gebruik handmatige barcode-invoer.';
+    return false;
+  }
+
+  // Op iPhone/Safari werkt live getUserMedia alleen in een secure context (HTTPS).
+  // Een file-input met capture mag wel de systeemcamera openen, ook als live video niet beschikbaar is.
+  photoInput.setAttribute('accept', 'image/*');
+  photoInput.setAttribute('capture', 'environment');
+  message.textContent = 'Camera openen… maak een scherpe foto van de barcode.';
+  try {
+    photoInput.click();
+    return true;
+  } catch (_) {
+    message.textContent = reason || 'Tik op “Foto barcode” om de camera te openen.';
+    return false;
+  }
+}
+
 async function stopScanner() {
   if (scanner) {
     try {
@@ -149,12 +170,15 @@ async function startScanner() {
   unlockAudio();
   successLayer?.classList.remove('show');
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    message.textContent = 'Camera wordt op dit toestel niet ondersteund.';
-    return;
-  }
   if (typeof Html5Qrcode === 'undefined') {
     message.textContent = 'Scannerbestand kon niet laden. Open de app opnieuw met internetverbinding.';
+    return;
+  }
+
+  // Safari/iOS blokkeert live camera op een gewone http:// VPS-pagina.
+  // In dat geval openen we direct de native camera/foto fallback.
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    openPhotoCameraFallback('Live camera vereist HTTPS. De fotocamera wordt gebruikt.');
     return;
   }
 
@@ -183,7 +207,7 @@ async function startScanner() {
     const videoElement = html5Reader.querySelector('video');
     cameraTrack = videoElement?.srcObject?.getVideoTracks?.()[0] || null;
     const capabilities = cameraTrack?.getCapabilities?.() || {};
-    if (capabilities.torch) torchBtn.hidden = false;
+    if (capabilities.torch && torchBtn) torchBtn.hidden = false;
 
     if (cameraTrack?.applyConstraints) {
       const advanced = [];
@@ -213,11 +237,14 @@ async function startScanner() {
       console.error('Scanner fallbackfout:', fallbackError);
       await stopScanner();
       if (fallbackError?.name === 'NotAllowedError') {
-        message.textContent = 'Cameratoegang is geweigerd. Sta camera toe bij de instellingen van Safari.';
+        message.textContent = 'Live camera niet toegestaan. De fotocamera wordt geopend.';
+        openPhotoCameraFallback();
       } else if (fallbackError?.name === 'NotFoundError') {
-        message.textContent = 'Geen achtercamera gevonden.';
+        message.textContent = 'Geen live achtercamera gevonden. De fotocamera wordt geopend.';
+        openPhotoCameraFallback();
       } else {
-        message.textContent = 'Camera kon niet starten. Sluit de app volledig en open hem opnieuw.';
+        message.textContent = 'Live camera kon niet starten. De fotocamera wordt geopend.';
+        openPhotoCameraFallback();
       }
     }
   } finally {

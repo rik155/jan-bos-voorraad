@@ -40,5 +40,54 @@
 </main>
 <nav class="clean-nav"><a href="/"><span>⌂</span>Dashboard</a><a class="active" href="/producten"><span>▦</span>Producten</a><a href="/backups"><span>▣</span>Back-ups</a></nav>
 <div id="toast" class="toast"></div>
-<div class="modal" id="addModal"><div class="box"><button class="close" onclick="closeModal('addModal')">×</button><h2>Product toevoegen</h2><form method="post" action="/products" enctype="multipart/form-data" class="form-grid"><label>Productnaam<input name="name" required autofocus></label><label>Artikelcode<input name="article_number"></label><label>Barcode<input name="barcode" inputmode="numeric"></label><label>Foto<input name="photo" type="file" accept="image/*" capture="environment"></label><label>Categorie<input name="category"></label><label>Eenheid<select name="unit"><option>stuks</option><option>kokers</option><option>rollen</option><option>dozen</option><option>liter</option><option>kg</option></select></label><label>Beginvoorraad<input name="stock" type="number" min="0" step="0.01" value="0"></label><label>Minimumvoorraad<input name="minimum_stock" type="number" min="0" step="0.01" value="0"></label><button class="primary wide">Opslaan</button></form></div></div>
-<script src="/static/app.js"></script></body></html>
+
+<div class="modal" id="addModal">
+  <div class="box">
+    <button class="close" onclick="closeModal('addModal')">×</button>
+    <h2>Product toevoegen</h2>
+    <p class="lead">Vul de naam in, scan de barcode en geef de beginvoorraad op.</p>
+
+    <form method="post" action="/products" class="form-grid" id="addProductForm">
+      <label>Productnaam
+        <input name="name" id="addProductName" required autofocus autocomplete="off" placeholder="Bijv. Kit wit">
+      </label>
+
+      <label>Barcode
+        <input name="barcode" id="addProductBarcode" required inputmode="numeric" autocomplete="off" placeholder="Scan of vul barcode in">
+      </label>
+
+      <button type="button" id="startScanner" class="other wide">📷 Barcode scannen</button>
+
+      <div id="scannerBox" class="scanner-box pro-scanner" hidden>
+        <div id="html5Reader" class="html5-reader"></div>
+        <div class="scan-shade"></div>
+        <div class="scan-corners"></div>
+        <div class="scan-line"></div>
+        <div id="scanSuccess" class="scan-success"><span>✓</span><strong>Gescand</strong></div>
+      </div>
+      <div id="scannerMessage" class="scanner-message">Tik op ‘Barcode scannen’ om de camera te openen.</div>
+      <div class="scanner-controls">
+        <button type="button" id="torchScanner" class="other torch-button" hidden>💡 Zaklamp aan</button>
+        <button type="button" id="stopScanner" class="other" hidden>Camera stoppen</button>
+      </div>
+
+      <label class="photo-scan-button">📸 Barcode scannen via foto
+        <input id="barcodePhoto" type="file" accept="image/*" capture="environment">
+      </label>
+
+      <label>Hoeveelheid
+        <input name="stock" id="addProductStock" type="number" min="0" step="0.01" value="1" required inputmode="decimal">
+      </label>
+
+      <input type="hidden" name="unit" value="stuks">
+      <input type="hidden" name="minimum_stock" value="0">
+      <button class="primary wide">Product opslaan</button>
+    </form>
+  </div>
+</div>
+
+<script>window.SCANNER_MODE='add-product';</script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'"></script>
+<script src="/static/scanner.js?v=21"></script>
+<script src="/static/app.js?v=21"></script>
+</body></html>

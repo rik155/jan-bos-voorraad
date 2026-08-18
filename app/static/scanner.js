@@ -20,14 +20,21 @@ function cleanBarcode(value) {
 function targetFor(code) {
   const clean = cleanBarcode(code);
   if (!clean) return;
-  if (window.SCANNER_MODE === 'daily') lookupDaily(clean);
+  if (window.SCANNER_MODE === 'add-product') {
+    const input = document.getElementById('addProductBarcode');
+    if (input) {
+      input.value = clean;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      message.textContent = 'Barcode ingevuld: ' + clean;
+      document.getElementById('addProductStock')?.focus();
+    }
+    busy = false;
+  } else if (window.SCANNER_MODE === 'daily') lookupDaily(clean);
   else if (window.SCANNER_MODE === 'control') location.href = '/controle?session_id=' + encodeURIComponent(window.CONTROL_SESSION_ID) + '&barcode=' + encodeURIComponent(clean);
   else location.href = '/inventarisatie?barcode=' + encodeURIComponent(clean);
 }
 
 async function lookupDaily(code) {
-  // finishScan heeft busy al aangezet om dubbele scans te blokkeren.
-  // Zoek het product daarom altijd op en gebruik busy alleen als scan-lock.
   busy = true;
   message.textContent = 'Product zoeken...';
   try {
@@ -89,13 +96,16 @@ async function stopScanner() {
   }
   cameraTrack = null;
   torchOn = false;
-  torchBtn.hidden = true;
-  torchBtn.classList.remove('active');
-  torchBtn.textContent = '💡 Zaklamp aan';
-  html5Reader.innerHTML = '';
-  scannerBox.classList.remove('scanner-running');
-  startBtn.hidden = false;
-  stopBtn.hidden = true;
+  if (torchBtn) {
+    torchBtn.hidden = true;
+    torchBtn.classList.remove('active');
+    torchBtn.textContent = '💡 Zaklamp aan';
+  }
+  if (html5Reader) html5Reader.innerHTML = '';
+  scannerBox?.classList.remove('scanner-running');
+  if (window.SCANNER_MODE === 'add-product' && scannerBox) scannerBox.hidden = true;
+  if (startBtn) startBtn.hidden = false;
+  if (stopBtn) stopBtn.hidden = true;
 }
 
 async function finishScan(code) {
@@ -152,6 +162,7 @@ async function startScanner() {
   message.textContent = 'Achtercamera starten...';
 
   try {
+    if (window.SCANNER_MODE === 'add-product' && scannerBox) scannerBox.hidden = false;
     scannerBox.classList.add('scanner-running');
     scanner = new Html5Qrcode('html5Reader', {
       formatsToSupport: getFormats(),
@@ -174,7 +185,6 @@ async function startScanner() {
     const capabilities = cameraTrack?.getCapabilities?.() || {};
     if (capabilities.torch) torchBtn.hidden = false;
 
-    // iPhone 11: vraag na het starten de best haalbare camera-instellingen aan.
     if (cameraTrack?.applyConstraints) {
       const advanced = [];
       if (capabilities.focusMode?.includes?.('continuous')) advanced.push({ focusMode: 'continuous' });
@@ -186,8 +196,8 @@ async function startScanner() {
   } catch (error) {
     console.error('Scanner startfout:', error);
     try {
-      // Safari accepteert op sommige iPhones alleen de eenvoudigere camera-aanvraag.
       await stopScanner();
+      if (window.SCANNER_MODE === 'add-product' && scannerBox) scannerBox.hidden = false;
       scannerBox.classList.add('scanner-running');
       scanner = new Html5Qrcode('html5Reader', { formatsToSupport: getFormats(), verbose: false });
       await scanner.start(
@@ -246,6 +256,7 @@ document.getElementById('barcodePhoto')?.addEventListener('change', async event 
   message.textContent = 'Barcode op foto zoeken...';
   try {
     if (typeof Html5Qrcode === 'undefined') throw new Error('Scannerbestand niet geladen');
+    if (window.SCANNER_MODE === 'add-product' && scannerBox) scannerBox.hidden = false;
     const photoScanner = new Html5Qrcode('html5Reader', { formatsToSupport: getFormats(), verbose: false });
     const code = await photoScanner.scanFile(file, true);
     try { await photoScanner.clear(); } catch (_) {}
@@ -253,6 +264,7 @@ document.getElementById('barcodePhoto')?.addEventListener('change', async event 
   } catch (_) {
     message.textContent = 'Geen barcode gevonden. Maak de foto recht, scherp en dichtbij.';
     event.target.value = '';
+    if (window.SCANNER_MODE === 'add-product' && scannerBox) scannerBox.hidden = true;
   }
 });
 

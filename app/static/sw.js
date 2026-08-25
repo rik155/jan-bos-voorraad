@@ -1,8 +1,8 @@
-const CACHE = 'jan-bos-voorraad-pwa-v20';
+const CACHE = 'jan-bos-voorraad-pwa-v21';
 const STATIC_ASSETS = [
   '/static/style.css',
-  '/static/app.js',
-  '/static/scanner.js',
+  '/static/app.js?v=21',
+  '/static/scanner.js?v=21',
   '/static/janbos_logo.png',
   '/static/apple-touch-icon.png',
   '/static/icon-192.png',
@@ -27,12 +27,24 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Voorraadpagina's en API altijd live ophalen, zodat aantallen nooit uit oude cache komen.
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(() => caches.match('/static/offline.html')));
     return;
   }
   if (url.pathname.startsWith('/api/') || url.pathname === '/export.xlsx') return;
+
+  // JS altijd eerst van het netwerk halen. Zo blijft een oude scanner nooit
+  // in de PWA-cache hangen na een update.
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(request).then(response => {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(request, copy));
+        return response;
+      }).catch(() => caches.match(request))
+    );
+    return;
+  }
 
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(

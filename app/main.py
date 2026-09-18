@@ -355,12 +355,14 @@ def product_page(request: Request, product_id: int, mode: str = ""):
 
 
 @app.post("/products/{product_id}/take")
-def take_product(product_id: int, amount: float = Form(...), note: str = Form("")):
-    """Dagelijkse uitgifte: scan product, vul aantal en optionele opmerking in."""
+def take_product(product_id: int, amount: float = Form(...), note: str = Form(""), direction: str = Form("uit")):
+    """Dagelijkse mutatie: scan product en boek het gekozen aantal in of uit."""
     if amount <= 0:
         raise HTTPException(400, "Aantal moet groter zijn dan nul")
-    reason = note.strip() or "Uit magazijn gepakt"
-    change_stock(product_id, -amount, reason=reason, employee="")
+    if direction not in {"in", "uit"}:
+        raise HTTPException(400, "Kies inboeken of uitboeken")
+    reason = note.strip() or ("Voorraad ingeboekt" if direction == "in" else "Uit magazijn gepakt")
+    change_stock(product_id, amount if direction == "in" else -amount, reason=reason, employee="")
     return RedirectResponse("/scan?saved=1", 303)
 
 

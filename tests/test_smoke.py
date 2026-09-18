@@ -77,3 +77,8 @@ def test_daily_scan_take_with_note():
     assert r.headers['location'] == '/scan?saved=1'
     after = client.get(f'/api/barcode/{barcode}').json()
     assert after['stock'] == 17
+
+    r = client.post(f'/products/{product_id}/take', data={'amount': '4', 'direction': 'in', 'note': 'Nieuwe levering'}, follow_redirects=False)
+    assert r.status_code == 303
+    after_in = client.get(f'/api/barcode/{barcode}').json()
+    assert after_in['stock'] == 21

@@ -41,6 +41,7 @@ class Product(Base):
     article_number: Mapped[str] = mapped_column(String(100), default="", index=True)
     barcode: Mapped[str] = mapped_column(String(100), default="", index=True)
     category: Mapped[str] = mapped_column(String(100), default="")
+    supplier: Mapped[str] = mapped_column(String(150), default="", index=True)
     unit: Mapped[str] = mapped_column(String(40), default="stuks")
     location: Mapped[str] = mapped_column(String(100), default="")
     stock: Mapped[float] = mapped_column(Float, default=0)
@@ -103,6 +104,8 @@ with engine.begin() as connection:
         connection.execute(text("ALTER TABLE products ADD COLUMN photo_data TEXT DEFAULT ''"))
     if "barcode" not in columns:
         connection.execute(text("ALTER TABLE products ADD COLUMN barcode VARCHAR(100) DEFAULT ''"))
+    if "supplier" not in columns:
+        connection.execute(text("ALTER TABLE products ADD COLUMN supplier VARCHAR(150) DEFAULT ''"))
 
 
 PRODUCT_IMAGE_MAP = {}
@@ -190,23 +193,26 @@ def dashboard(request: Request):
 
 
 @app.get("/producten", response_class=HTMLResponse)
-def products_page(request: Request, q: str = "", category: str = "", low: int = 0):
+def products_page(request: Request, q: str = "", category: str = "", supplier: str = "", low: int = 0):
     with Session(engine) as db:
         stmt = select(Product)
         if q:
             like = f"%{q}%"
-            stmt = stmt.where((Product.name.ilike(like)) | (Product.article_number.ilike(like)) | (Product.barcode.ilike(like)))
+            stmt = stmt.where((Product.name.ilike(like)) | (Product.article_number.ilike(like)) | (Product.barcode.ilike(like)) | (Product.supplier.ilike(like)))
         if category:
             stmt = stmt.where(Product.category == category)
+        if supplier:
+            stmt = stmt.where(Product.supplier == supplier)
         if low:
             stmt = stmt.where(Product.stock <= Product.minimum_stock)
         products = list(db.scalars(stmt.order_by(Product.name)))
         categories = list(db.scalars(select(Product.category).where(Product.category != "").distinct().order_by(Product.category)))
+        suppliers = list(db.scalars(select(Product.supplier).where(Product.supplier != "").distinct().order_by(Product.supplier)))
         total = db.scalar(select(func.count(Product.id))) or 0
         low_count = db.scalar(select(func.count(Product.id)).where(Product.stock <= Product.minimum_stock)) or 0
         popular_ids = [row[0] for row in db.execute(select(StockMutation.product_id, func.count(StockMutation.id)).group_by(StockMutation.product_id).order_by(func.count(StockMutation.id).desc()).limit(6))]
         popular = [db.get(Product, product_id) for product_id in popular_ids]
-    return templates.TemplateResponse("products.html", {"request": request, "products": products, "popular": popular, "categories": categories, "q": q, "selected_category": category, "low": low, "total_products": total, "low_count": low_count})
+    return templates.TemplateResponse("products.html", {"request": request, "products": products, "popular": popular, "categories": categories, "suppliers": suppliers, "q": q, "selected_category": category, "selected_supplier": supplier, "low": low, "total_products": total, "low_count": low_count})
 
 
 @app.post("/controle/start")
@@ -304,7 +310,7 @@ def barcode_lookup(barcode: str):
 @app.post("/inventory/create")
 def inventory_create(
     barcode: str = Form(...), name: str = Form(...), article_number: str = Form(""),
-    unit: str = Form("stuks"), location: str = Form(""), stock: float = Form(0),
+    supplier: str = Form(""), unit: str = Form("stuks"), location: str = Form(""), stock: float = Form(0),
     minimum_stock: float = Form(0), photo: UploadFile | None = File(None),
 ):
     barcode = clean_barcode(barcode)
@@ -314,7 +320,7 @@ def inventory_create(
     with Session(engine) as db:
         if get_product_by_barcode(db, barcode):
             raise HTTPException(400, "Deze barcode is al gekoppeld")
-        product = Product(name=name.strip(), article_number=article_number.strip(), barcode=barcode, unit=unit.strip() or "stuks", location=location.strip(), stock=stock, minimum_stock=minimum_stock, photo_data=photo_data)
+        product = Product(name=name.strip(), article_number=article_number.strip(), barcode=barcode, supplier=supplier.strip(), unit=unit.strip() or "stuks", location=location.strip(), stock=stock, minimum_stock=minimum_stock, photo_data=photo_data)
         db.add(product)
         db.flush()
         db.add(StockMutation(product_id=product.id, change=stock, stock_after=stock, reason="Inventarisatie beginvoorraad", employee="Inventarisatie"))
@@ -367,7 +373,7 @@ def take_product(product_id: int, amount: float = Form(...), note: str = Form(""
 
 
 @app.post("/products")
-def add_product(name: str = Form(...), article_number: str = Form(""), barcode: str = Form(""), category: str = Form(""), unit: str = Form("stuks"), location: str = Form(""), stock: float = Form(0), minimum_stock: float = Form(0), photo: UploadFile | None = File(None)):
+def add_product(name: str = Form(...), article_number: str = Form(""), barcode: str = Form(""), category: str = Form(""), supplier: str = Form(""), unit: str = Form("stuks"), location: str = Form(""), stock: float = Form(0), minimum_stock: float = Form(0), photo: UploadFile | None = File(None)):
     if not name.strip():
         raise HTTPException(400, "Productnaam ontbreekt")
     barcode = clean_barcode(barcode)
@@ -375,7 +381,7 @@ def add_product(name: str = Form(...), article_number: str = Form(""), barcode: 
     with Session(engine) as db:
         if barcode and get_product_by_barcode(db, barcode):
             raise HTTPException(400, "Deze barcode is al gekoppeld")
-        product = Product(name=name.strip(), article_number=article_number.strip(), barcode=barcode, category=category.strip(), unit=unit.strip() or "stuks", location=location.strip(), stock=stock, minimum_stock=minimum_stock, photo_data=photo_data)
+        product = Product(name=name.strip(), article_number=article_number.strip(), barcode=barcode, category=category.strip(), supplier=supplier.strip(), unit=unit.strip() or "stuks", location=location.strip(), stock=stock, minimum_stock=minimum_stock, photo_data=photo_data)
         db.add(product); db.flush()
         if stock:
             db.add(StockMutation(product_id=product.id, change=stock, stock_after=stock, reason="Beginvoorraad", employee="Systeem"))
@@ -410,7 +416,7 @@ def mutate(product_id: int, amount: float = Form(...), direction: str = Form(...
 
 
 @app.post("/products/{product_id}/edit")
-def edit(product_id: int, name: str = Form(...), article_number: str = Form(""), barcode: str = Form(""), category: str = Form(""), unit: str = Form("stuks"), location: str = Form(""), minimum_stock: float = Form(0), photo: UploadFile | None = File(None), remove_photo: int = Form(0)):
+def edit(product_id: int, name: str = Form(...), article_number: str = Form(""), barcode: str = Form(""), category: str = Form(""), supplier: str = Form(""), unit: str = Form("stuks"), location: str = Form(""), minimum_stock: float = Form(0), photo: UploadFile | None = File(None), remove_photo: int = Form(0)):
     barcode = clean_barcode(barcode)
     with Session(engine) as db:
         product = db.get(Product, product_id)
@@ -420,7 +426,7 @@ def edit(product_id: int, name: str = Form(...), article_number: str = Form(""),
         if existing and existing.id != product_id:
             raise HTTPException(400, "Deze barcode is al gekoppeld")
         product.name = name.strip(); product.article_number = article_number.strip(); product.barcode = barcode
-        product.category = category.strip(); product.unit = unit.strip() or "stuks"; product.location = location.strip(); product.minimum_stock = minimum_stock
+        product.category = category.strip(); product.supplier = supplier.strip(); product.unit = unit.strip() or "stuks"; product.location = location.strip(); product.minimum_stock = minimum_stock
         if remove_photo: product.photo_data = ""
         elif photo and photo.filename: product.photo_data = make_photo_data(photo)
         db.commit()
@@ -507,6 +513,7 @@ def restore_inventory_from_excel(data: bytes, source_label: str) -> dict:
             article = str(ws.cell(row, headers.get("Artikelcode", 0)).value or '').strip() if headers.get("Artikelcode") else ''
             barcode = clean_barcode(str(ws.cell(row, headers.get("Barcode", 0)).value or '')) if headers.get("Barcode") else ''
             category = str(ws.cell(row, headers.get("Categorie", 0)).value or '').strip() if headers.get("Categorie") else ''
+            supplier = str(ws.cell(row, headers.get("Leverancier", 0)).value or '').strip() if headers.get("Leverancier") else ''
             unit = str(ws.cell(row, headers.get("Eenheid", 0)).value or 'stuks').strip() if headers.get("Eenheid") else 'stuks'
             stock_raw = ws.cell(row, headers["Voorraad"]).value
             min_raw = ws.cell(row, headers.get("Minimum", 0)).value if headers.get("Minimum") else 0
@@ -534,6 +541,7 @@ def restore_inventory_from_excel(data: bytes, source_label: str) -> dict:
                 if article: product.article_number = article
                 if barcode: product.barcode = barcode
                 product.category = category
+                product.supplier = supplier
                 product.unit = unit or "stuks"
                 product.minimum_stock = minimum
                 product.stock = stock
@@ -548,7 +556,7 @@ def restore_inventory_from_excel(data: bytes, source_label: str) -> dict:
                 updated += 1
             else:
                 product = Product(
-                    name=name, article_number=article, barcode=barcode, category=category,
+                    name=name, article_number=article, barcode=barcode, category=category, supplier=supplier,
                     unit=unit or "stuks", stock=stock, minimum_stock=minimum,
                 )
                 db.add(product)
@@ -571,7 +579,7 @@ def build_inventory_workbook(products, mutations):
     red = "FFC7CE"; red_text = "9C0006"; orange = "FCE4D6"; orange_text = "9C5700"; light = "EAF1F5"
     thin = Side(style="thin", color="D9E2E8")
 
-    ws.merge_cells("A1:I1")
+    ws.merge_cells("A1:J1")
     ws["A1"] = "JAN BOS VOORRAADOVERZICHT"
     ws["A1"].font = Font(size=18, bold=True, color="FFFFFF")
     ws["A1"].fill = PatternFill("solid", fgColor=navy)
@@ -582,36 +590,36 @@ def build_inventory_workbook(products, mutations):
     ws["G2"] = "Onder minimum"; ws["H2"] = sum(1 for p in products if p.stock < p.minimum_stock)
     for c in ("A2","D2","G2"):
         ws[c].font = Font(bold=True, color=navy)
-    headers = ["Product", "Artikelcode", "Barcode", "Categorie", "Voorraad", "Eenheid", "Minimum", "Status", "Bijbestellen"]
+    headers = ["Product", "Artikelcode", "Barcode", "Categorie", "Leverancier", "Voorraad", "Eenheid", "Minimum", "Status", "Bijbestellen"]
     ws.append([]); ws.append(headers)
     for cell in ws[4]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor=blue)
         cell.alignment = Alignment(horizontal="center")
     for idx, product in enumerate(products, start=5):
-        ws.append([product.name, product.article_number, product.barcode, product.category, product.stock, product.unit, product.minimum_stock, f'=IF(E{idx}<G{idx},"ROOD",IF(E{idx}=G{idx},"ORANJE","GROEN"))', f'=MAX(G{idx}-E{idx},0)'])
+        ws.append([product.name, product.article_number, product.barcode, product.category, product.supplier, product.stock, product.unit, product.minimum_stock, f'=IF(F{idx}<H{idx},"ROOD",IF(F{idx}=H{idx},"ORANJE","GROEN"))', f'=MAX(H{idx}-F{idx},0)'])
         for cell in ws[idx]:
             cell.border = Border(bottom=thin)
-        ws[f"E{idx}"].number_format = '0.##'
-        ws[f"G{idx}"].number_format = '0.##'
-        ws[f"I{idx}"].number_format = '0.##'
+        ws[f"F{idx}"].number_format = '0.##'
+        ws[f"H{idx}"].number_format = '0.##'
+        ws[f"J{idx}"].number_format = '0.##'
     last=max(5, 4+len(products))
-    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5<$G5"], fill=PatternFill("solid", fgColor=red), font=Font(color=red_text)))
-    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5=$G5"], fill=PatternFill("solid", fgColor=orange), font=Font(color=orange_text)))
-    ws.conditional_formatting.add(f"A5:I{last}", FormulaRule(formula=["$E5>$G5"], fill=PatternFill("solid", fgColor=green), font=Font(color=green_text)))
-    widths=[34,16,20,18,12,14,12,14,14]
+    ws.conditional_formatting.add(f"A5:J{last}", FormulaRule(formula=["$F5<$H5"], fill=PatternFill("solid", fgColor=red), font=Font(color=red_text)))
+    ws.conditional_formatting.add(f"A5:J{last}", FormulaRule(formula=["$F5=$H5"], fill=PatternFill("solid", fgColor=orange), font=Font(color=orange_text)))
+    ws.conditional_formatting.add(f"A5:J{last}", FormulaRule(formula=["$F5>$H5"], fill=PatternFill("solid", fgColor=green), font=Font(color=green_text)))
+    widths=[34,16,20,18,24,12,14,12,14,14]
     for i,w in enumerate(widths,1): ws.column_dimensions[get_column_letter(i)].width=w
-    ws.freeze_panes="A5"; ws.auto_filter.ref=f"A4:I{last}"
+    ws.freeze_panes="A5"; ws.auto_filter.ref=f"A4:J{last}"
 
     order = wb.create_sheet("Bijbestellen")
     order.sheet_view.showGridLines=False
-    order.append(["Product", "Artikelcode", "Barcode", "Voorraad", "Minimum", "Te bestellen", "Eenheid"])
+    order.append(["Product", "Artikelcode", "Barcode", "Leverancier", "Voorraad", "Minimum", "Te bestellen", "Eenheid"])
     for c in order[1]: c.font=Font(bold=True,color="FFFFFF"); c.fill=PatternFill("solid",fgColor=navy)
     for product in products:
         if product.stock < product.minimum_stock:
-            order.append([product.name, product.article_number, product.barcode, product.stock, product.minimum_stock, max(product.minimum_stock-product.stock,0), product.unit])
-    for i,w in enumerate([34,16,20,12,12,14,14],1): order.column_dimensions[get_column_letter(i)].width=w
-    order.freeze_panes="A2"; order.auto_filter.ref=f"A1:G{max(1,order.max_row)}"
+            order.append([product.name, product.article_number, product.barcode, product.supplier, product.stock, product.minimum_stock, max(product.minimum_stock-product.stock,0), product.unit])
+    for i,w in enumerate([34,16,20,24,12,12,14,14],1): order.column_dimensions[get_column_letter(i)].width=w
+    order.freeze_panes="A2"; order.auto_filter.ref=f"A1:H{max(1,order.max_row)}"
 
     hist = wb.create_sheet("Mutaties")
     hist.sheet_view.showGridLines=False
